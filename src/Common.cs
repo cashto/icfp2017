@@ -14,6 +14,17 @@ namespace Icfp2017
         public string me;
     }
 
+    class YouMessage
+    {
+        public string you;
+    }
+
+    class ReadyMessage
+    {
+        public int ready;
+        public JObject state;
+    }
+
     class SetupResponse
     {
         public int ready;
@@ -114,10 +125,10 @@ namespace Icfp2017
             this.writer = writer;
         }
 
-        public ServerMessage Read()
+        public T Read<T>()
         {
             commands.MoveNext();
-            return JsonConvert.DeserializeObject<ServerMessage>(commands.Current, DeserializerSettings);
+            return JsonConvert.DeserializeObject<T>(commands.Current, DeserializerSettings);
         }
 
         public void Write<T>(T obj)

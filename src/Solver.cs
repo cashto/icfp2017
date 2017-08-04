@@ -21,9 +21,9 @@ namespace Icfp2017
 
             parser.Write(new MeMessage() { me = "cashto" });
 
-            parser.Read(); // it's a 'you' message, ignore.
+            parser.Read<YouMessage>();
 
-            var message = parser.Read();
+            var message = parser.Read<ServerMessage>();
 
             if (message.punter != null)
             {
@@ -37,7 +37,7 @@ namespace Icfp2017
             }
             else if (message.move != null)
             {
-                parser.Write(ComputeMove(message, RandomStrategy));
+                parser.Write(ComputeMove(message, GreedyStrategy));
             }
         }
 
