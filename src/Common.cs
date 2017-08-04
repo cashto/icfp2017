@@ -116,7 +116,7 @@ namespace Icfp2017
 
         public static readonly JsonSerializerSettings SerializerSettings = new JsonSerializerSettings()
         {
-            NullValueHandling = NullValueHandling.Ignore
+            NullValueHandling = NullValueHandling.Ignore,
         };
 
         public Parser(TextReader reader, TextWriter writer)
@@ -127,7 +127,11 @@ namespace Icfp2017
 
         public T Read<T>()
         {
-            commands.MoveNext();
+            if (!commands.MoveNext())
+            {
+                throw new Exception("Expected a command, got nothing");
+            }
+
             return JsonConvert.DeserializeObject<T>(commands.Current, DeserializerSettings);
         }
 

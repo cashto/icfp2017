@@ -7,8 +7,8 @@
     <ProjectGuid>{67926E5E-7702-4C56-A2DB-788750E424A5}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>src</RootNamespace>
-    <AssemblyName>src</AssemblyName>
+    <RootNamespace>Icfp2017</RootNamespace>
+    <AssemblyName>punter</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>

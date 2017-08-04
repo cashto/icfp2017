@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,11 +18,21 @@ namespace Icfp2017
     {
         static void Main(string[] args)
         {
-            var parser = new Parser(Console.In, Console.Out);
+            Parser parser;
 
-            parser.Write(new MeMessage() { me = "cashto" });
-
-            parser.Read<YouMessage>();
+            bool debug = false;
+            if (debug)
+            {
+                parser = new Parser(
+                    new StreamReader(@"C:\Users\cashto\Documents\GitHub\icfp2017\Server\bin\Debug\debug"), 
+                    Console.Out);
+            }
+            else
+            {
+                parser = new Parser(Console.In, Console.Out);
+                parser.Write(new MeMessage() { me = "cashto" });
+                parser.Read<YouMessage>();
+            }
 
             var message = parser.Read<ServerMessage>();
 
@@ -32,7 +43,9 @@ namespace Icfp2017
                 parser.Write(new SetupResponse()
                 {
                     ready = message.punter.Value,
-                    state = new JObject(new SolverState() { initialState = message })
+                    state = JObject.FromObject(
+                        new SolverState() { initialState = message }, 
+                        new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore })
                 });
             }
             else if (message.move != null)
@@ -67,7 +80,7 @@ namespace Icfp2017
 
             while (true)
             {
-                var originalSize = ans.Count;
+                var newAns = ans.ToDictionary(i => i.Key, i => i.Value);
 
                 foreach (var river in map.rivers)
                 {
@@ -76,18 +89,20 @@ namespace Icfp2017
 
                     if (sourceDistance.HasValue && !targetDistance.HasValue)
                     {
-                        ans.Add(river.target, sourceDistance.Value + 1);
+                        newAns[river.target] = sourceDistance.Value + 1;
                     }
                     else if (!sourceDistance.HasValue && targetDistance.HasValue)
                     {
-                        ans.Add(river.source, targetDistance.Value + 1);
+                        newAns[river.source] = targetDistance.Value + 1;
                     }
                 }
 
-                if (originalSize == ans.Count)
+                if (newAns.Count == ans.Count)
                 {
                     return ans;
                 }
+
+                ans = newAns;
             }
         }
 
@@ -102,12 +117,14 @@ namespace Icfp2017
             return ans;
         }
 
+        static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
+
         static Dictionary<int, List<HashSet<int>>> ComputeTrees(
-            MoveMessage message)
+            List<Move> moves)
         {
             var ans = new Dictionary<int, List<HashSet<int>>>();
 
-            var claims = message.moves
+            var claims = moves
                 .Select(move => move.claim)
                 .Where(claim => claim != null);
 
@@ -200,7 +217,9 @@ namespace Icfp2017
 
             var myId = state.initialState.punter.Value;
 
-            var trees = ComputeTrees(message.move)[myId];
+            var allTrees = ComputeTrees(message.move.moves);
+
+            var trees = allTrees.ContainsKey(myId) ? allTrees[myId] : EmptyTreeList;
 
             return availableRivers
                 .Select(river => new { river = river, score = ComputeRiverScore(state.initialState, trees, river) })

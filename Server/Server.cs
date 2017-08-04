@@ -11,11 +11,13 @@ namespace Icfp2017
 {
     class Program
     {
+        static readonly string RootPath = @"C:\Users\cashto\Documents\GitHub\icfp2017\work";
+
         static void Main(string[] args)
         {
-            var mapFile = args[1];
+            var mapFile = Path.Combine(RootPath, "maps", args[0] + ".json");
 
-            var ais = args.Skip(2).ToList();
+            var ais = args.Skip(1).ToList();
 
             var map = JsonConvert.DeserializeObject<Map>(File.ReadAllText(mapFile));
 
@@ -42,28 +44,34 @@ namespace Icfp2017
                     {
                         move = new MoveMessage()
                         {
-                            moves = moves,
-                            state = states[aiIdx]
-                        }
+                            moves = moves
+                        },
+                        state = states[aiIdx]
                     });
 
                 states[aiIdx] = move.state;
                 move.state = null;
                 moves.Add(move);
             }
+
+            Console.WriteLine(JsonConvert.SerializeObject(moves, Formatting.Indented, Parser.SerializerSettings));
         }
 
         static T RunAi<T>(
             string ai,
             ServerMessage input)
         {
-            var path = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\ai";
+            using (var dbgWriter = new StreamWriter("debug"))
+            {
+                var dbgParser = new Parser(null, dbgWriter);
+                dbgParser.Write(input);
+            }
 
             var process = new Process()
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = path + @"\" + ai + @"\\solver.exe",
+                    FileName = Path.Combine(RootPath, "ai", ai, "punter.exe"),
                     RedirectStandardInput = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
