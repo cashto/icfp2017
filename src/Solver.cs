@@ -20,7 +20,9 @@ namespace Icfp2017
         {
             Parser parser;
 
-            bool debug = false;
+            var debug = false;
+            Strategy strategy = RandomStrategy;
+
             if (debug)
             {
                 parser = new Parser(
@@ -38,7 +40,7 @@ namespace Icfp2017
 
             if (message.punter != null)
             {
-                ComputeMineDistances(message.map);
+                Utils.ComputeMineDistances(message.map);
 
                 parser.Write(new SetupResponse()
                 {
@@ -50,116 +52,8 @@ namespace Icfp2017
             }
             else if (message.move != null)
             {
-                parser.Write(ComputeMove(message, GreedyStrategy));
+                parser.Write(ComputeMove(message, strategy));
             }
-        }
-
-        static void ComputeMineDistances(Map map)
-        {
-            var mineDistances = map.mines.ToDictionary(
-                    mine => mine,
-                    mine => ComputeMineDistance(map, mine));
-
-            foreach (Site site in map.sites)
-            {
-                site.mineDistances = mineDistances
-                    .Where(mine => mine.Value.ContainsKey(site.id))
-                    .Select(mine => new MineDistance() { mineId = mine.Key, distance = mine.Value[site.id] })
-                    .ToList();            
-            }
-        }
-
-        static Dictionary<int, int> ComputeMineDistance(
-            Map map,
-            int mine)
-        {
-            var ans = new Dictionary<int, int>()
-            {
-                [mine] = 0
-            };
-
-            while (true)
-            {
-                var newAns = ans.ToDictionary(i => i.Key, i => i.Value);
-
-                foreach (var river in map.rivers)
-                {
-                    var sourceDistance = TryGetValue(ans, river.source);
-                    var targetDistance = TryGetValue(ans, river.target);
-
-                    if (sourceDistance.HasValue && !targetDistance.HasValue)
-                    {
-                        newAns[river.target] = sourceDistance.Value + 1;
-                    }
-                    else if (!sourceDistance.HasValue && targetDistance.HasValue)
-                    {
-                        newAns[river.source] = targetDistance.Value + 1;
-                    }
-                }
-
-                if (newAns.Count == ans.Count)
-                {
-                    return ans;
-                }
-
-                ans = newAns;
-            }
-        }
-
-        static int? TryGetValue(Dictionary<int, int> dict, int key)
-        {
-            int ans;
-            if (!dict.TryGetValue(key, out ans))
-            {
-                return null;
-            }
-
-            return ans;
-        }
-
-        static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
-
-        static Dictionary<int, List<HashSet<int>>> ComputeTrees(
-            List<Move> moves)
-        {
-            var ans = new Dictionary<int, List<HashSet<int>>>();
-
-            var claims = moves
-                .Select(move => move.claim)
-                .Where(claim => claim != null);
-
-            foreach (var claim in claims)
-            {
-                if (!ans.ContainsKey(claim.punter))
-                {
-                    ans[claim.punter] = new List<HashSet<int>>();
-                }
-
-                var trees = ans[claim.punter];
-
-                var matchingTrees = trees
-                    .Where(tree => tree.Contains(claim.source) || tree.Contains(claim.target))
-                    .ToList();
-
-                switch (matchingTrees.Count)
-                {
-                    case 0:
-                        trees.Add(new HashSet<int>() { claim.source, claim.target });
-                        break;
-                    case 1:
-                        matchingTrees.First().Add(claim.source);
-                        matchingTrees.First().Add(claim.target);
-                        break;
-                    case 2:
-                        matchingTrees.First().UnionWith(matchingTrees.Last());
-                        trees.Remove(matchingTrees.Last());
-                        break;
-                    default:
-                        throw new Exception("wtf?");
-                }
-            }
-
-            return ans;
         }
 
         delegate River Strategy(ServerMessage message, List<River> availableRivers);
@@ -206,7 +100,7 @@ namespace Icfp2017
             ServerMessage message,
             List<River> availableRivers)
         {
-            return availableRivers[new Random().Next(0, availableRivers.Count)];
+            return availableRivers[new Random(0).Next(0, availableRivers.Count)];
         }
 
         static River GreedyStrategy(
@@ -217,9 +111,9 @@ namespace Icfp2017
 
             var myId = state.initialState.punter.Value;
 
-            var allTrees = ComputeTrees(message.move.moves);
+            var allTrees = Utils.ComputeTrees(message.move.moves);
 
-            var trees = allTrees.ContainsKey(myId) ? allTrees[myId] : EmptyTreeList;
+            var trees = allTrees.ContainsKey(myId) ? allTrees[myId] : Utils.EmptyTreeList;
 
             return availableRivers
                 .Select(river => new { river = river, score = ComputeRiverScore(state.initialState, trees, river) })
@@ -252,19 +146,7 @@ namespace Icfp2017
 
             return mines.Sum(mine =>
                 trees.Sum(tree => 
-                    tree.Contains(mine) ? ComputeRiverScore(initialState, mine, newSite) : 0));
-        }
-
-        static int ComputeRiverScore(
-            ServerMessage initialState,
-            int mine,
-            int newSite)
-        {
-            var ans = initialState.map.sites
-                .First(site => site.id == newSite).mineDistances
-                .First(mineDistance => mineDistance.mineId == mine).distance;
-
-            return ans * ans;
+                    tree.Contains(mine) ? Utils.GetSquaredMineDistance(initialState.map.sites, mine, newSite) : 0));
         }
     }
 }

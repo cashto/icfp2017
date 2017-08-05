@@ -9,6 +9,19 @@ using System.Threading.Tasks;
 
 namespace Icfp2017
 {
+    class Output
+    {
+        public int score;
+        public List<int> scores;
+        public string map;
+        public VerboseOutput verbose;
+    }
+
+    class VerboseOutput
+    {
+        public List<Move> moves;
+    }
+
     class Program
     {
         static readonly string RootPath = @"C:\Users\cashto\Documents\GitHub\icfp2017\work";
@@ -20,6 +33,8 @@ namespace Icfp2017
             var ais = args.Skip(1).ToList();
 
             var map = JsonConvert.DeserializeObject<Map>(File.ReadAllText(mapFile));
+
+            //Utils.ComputeMineDistances(map);
 
             var states = Enumerable.Range(0, ais.Count)
                 .Select(idx => RunAi<ReadyMessage>(ais[idx],
@@ -37,6 +52,8 @@ namespace Icfp2017
 
             foreach (var moveNumber in Enumerable.Range(0, map.rivers.Count))
             {
+                Console.Error.WriteLine(moveNumber);
+
                 var aiIdx = moveNumber % ais.Count;
 
                 var move = RunAi<Move>(ais[aiIdx],
@@ -54,18 +71,43 @@ namespace Icfp2017
                 moves.Add(move);
             }
 
-            Console.WriteLine(JsonConvert.SerializeObject(moves, Formatting.Indented, Parser.SerializerSettings));
+            var allTrees = Utils.ComputeTrees(moves);
+            Utils.ComputeMineDistances(map);
+
+            var scores = Enumerable.Range(0, ais.Count)
+                .Select(idx =>
+                {
+                    var trees = allTrees.ContainsKey(idx) ? allTrees[idx] : Utils.EmptyTreeList;
+
+                    return map.mines.Sum(mine =>
+                        trees.Sum(tree =>
+                            tree.Contains(mine) ? tree.Sum(site => Utils.GetSquaredMineDistance(map.sites, mine, site)) : 0));
+                })
+                .ToList();
+
+            var output = new Output()
+            {
+                score = Math.Sign(scores[0] - scores[1]),
+                scores = scores,
+                map = args[0],
+                verbose = new VerboseOutput()
+                {
+                    moves = moves
+                }
+            };
+
+            Console.WriteLine(JsonConvert.SerializeObject(output, Formatting.Indented, Parser.SerializerSettings));
         }
 
         static T RunAi<T>(
             string ai,
             ServerMessage input)
         {
-            using (var dbgWriter = new StreamWriter("debug"))
-            {
-                var dbgParser = new Parser(null, dbgWriter);
-                dbgParser.Write(input);
-            }
+            //using (var dbgWriter = new StreamWriter("debug"))
+            //{
+            //    var dbgParser = new Parser(null, dbgWriter);
+            //    dbgParser.Write(input);
+            //}
 
             var process = new Process()
             {
@@ -93,8 +135,9 @@ namespace Icfp2017
 
             parser.Write(input);
             process.StandardInput.Close();
+            var ans = parser.Read<T>();
             tcs.Task.Wait();
-            return parser.Read<T>();
+            return ans;
         }
     }
 }
