@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+
+<script>
+    var output;
+    var map;
+    var xmax;
+    var xmin;
+    var ymax;
+    var ymin;
+    var cursor;
+    
+    function max(array) {
+        return Math.max.apply(null, array);
+    }
+    
+    function min(array) {
+        return Math.min.apply(null, array);
+    }
+
+    function OnLoad() {
+        var fso = new ActiveXObject('Scripting.FileSystemObject');
+        var file = fso.OpenTextFile('C:\\Users\\cashto\\Documents\\GitHub\\icfp2017\\work\\out.txt');
+        output = JSON.parse(file.ReadAll());
+        file.Close();
+        
+        var file = fso.OpenTextFile('C:\\Users\\cashto\\Documents\\GitHub\\icfp2017\\work\\maps\\' + output.map + '.json');
+        map = JSON.parse(file.ReadAll());
+        file.Close();
+        
+        var xs = map.sites.map(function(i) { return i.x; });
+        var ys = map.sites.map(function(i) { return i.y; });
+
+        xmax = max(xs);
+        xmin = min(xs);
+        ymax = max(ys);
+        ymin = min(ys);
+        
+        cursor = 0;
+        
+        Render();        
+    }
+    
+    function MapXy(x, y) {
+        return {
+            x: (x - xmin) / (xmax - xmin) * (ctlCanvas.width - 20) + 10.5,
+            y: (y - ymin) / (ymax - ymin) * (ctlCanvas.height - 20) + 10.5
+        }
+    }
+    
+    function Render() {
+        spanCursor.innerHTML = cursor;
+        spanScore.innerHTML = 'Red: ' + output.scores[0] + ', yellow: ' + output.scores[1];
+
+        var ctx = ctlCanvas.getContext('2d');
+        
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, ctlCanvas.width, ctlCanvas.height);
+        
+        for (var i = 0; i < map.rivers.length; ++i) {
+            var river = map.rivers[i];
+            var source = map.sites[river.source];
+            var target = map.sites[river.target];
+            var ptSource = MapXy(source.x, source.y);
+            var ptTarget = MapXy(target.x, target.y);
+            ctx.beginPath();
+            SetStyle(ctx, river);
+            ctx.moveTo(ptSource.x, ptSource.y);
+            ctx.lineTo(ptTarget.x, ptTarget.y);
+            ctx.stroke();
+        }
+        
+        for (var i = 0; i < map.sites.length; ++i) {
+            var site = map.sites[i];
+            var pt = MapXy(site.x, site.y);
+            ctx.fillStyle = "#cccccc";
+            ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
+        }
+        
+        for (var i = 0; i < map.mines.length; ++i) {
+            var site = map.sites[map.mines[i]];
+            var pt = MapXy(site.x, site.y);
+            ctx.fillStyle = "#ff6666";
+            ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8);
+            ctx.lineWidth = 1;
+            //ctx.strokeStyle = "#666600";
+            //ctx.strokeRect(pt.x - 4, pt.y - 4, 8, 8);
+        }
+    }
+    
+    function SetStyle(ctx, river) {
+        ctx.setLineDash([]);
+    
+        var item = output.verbose.moves.slice(0, cursor).filter(function(move) {
+            return move.claim != null && move.claim.source == river.source && move.claim.target == river.target;
+        });
+        
+        if (item.length == 0) {
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "#0000ff";
+            return;
+        }
+        
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = (item[0].claim.punter == 0) ? "#ff0000" : "#ffff00";
+
+        if (output.verbose.moves[cursor - 1] !== item[0]) {
+            ctx.setLineDash([2, 2]);
+        }
+    }
+    
+    function Move(newcursor) {
+        cursor = newcursor;
+        
+        if (cursor < 0) {
+            cursor = 0;
+        }
+        
+        if (cursor > output.verbose.moves.length) {
+            cursor = output.verbose.moves.length;
+        }
+                
+        Render();
+    }
+</script>
+
+<div style='float: left; margin: 10px'>
+<canvas id=ctlCanvas width=800 height=800 style='border: 1px solid black'></canvas>
+</div>
+
+<div style='margin: 10px'>
+<p>File:
+<input id=ctlFile type=text>
+<input type=button value='Load' onclick='OnLoad()'>
+
+<p>
+<input type=button value='|&lt;' onclick='Move(0)'>
+<input type=button value='&lt;&lt;' onclick='Move(cursor - 10)'>
+<input type=button value='&lt;' onclick='Move(cursor - 1)'>
+<span id=spanCursor>0</span>
+<input type=button value='&gt;' onclick='Move(cursor + 1)'>
+<input type=button value='&gt;&gt;' onclick='Move(cursor + 10)'>
+<input type=button value='&gt;|' onclick='Move(9e9)'>
+
+<p>
+<span id=spanScore></span>
+</div>
+

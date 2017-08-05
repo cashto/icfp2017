@@ -100,7 +100,8 @@ namespace Icfp2017
             ServerMessage message,
             List<River> availableRivers)
         {
-            return availableRivers[new Random(0).Next(0, availableRivers.Count)];
+            var seed = 0xdeadbeef;
+            return availableRivers[new Random((int)seed).Next() % availableRivers.Count];
         }
 
         static River GreedyStrategy(
