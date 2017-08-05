@@ -112,6 +112,7 @@ namespace Icfp2017
     {
         IEnumerator<string> commands;
         TextWriter writer;
+        public bool debug;
 
         public static readonly JsonSerializerSettings DeserializerSettings = new JsonSerializerSettings()
         {
@@ -137,6 +138,11 @@ namespace Icfp2017
                 throw new Exception("Expected a command, got nothing");
             }
 
+            if (debug)
+            {
+                Console.Error.WriteLine("< " + commands.Current);
+            }
+
             return JsonConvert.DeserializeObject<T>(commands.Current, DeserializerSettings);
         }
 
@@ -147,18 +153,27 @@ namespace Icfp2017
             writer.Write(':');
             writer.Write(s);
             writer.Flush();
+
+            if (debug)
+            {
+                Console.Error.WriteLine("> " + s);
+            }
         }
 
         static IEnumerable<string> ReadCommands(TextReader reader)
         {
-            int readChar;
+            //int readChar;
             var sb = new StringBuilder();
+            var chBuffer = new char[1];
 
-            while ((readChar = reader.Read()) != -1)
+            while (reader.ReadBlock(chBuffer, 0, 1) >= 0)
             {
-                var ch = (char)readChar;
+                var ch = chBuffer[0];
+                //Console.Error.WriteLine($"#{(int)ch} '{ch}'");
+
                 if (ch == ':')
                 {
+                    //Console.Error.WriteLine($"<< '{sb.ToString()}'");
                     var n = int.Parse(sb.ToString());
                     var buffer = new char[n];
                     reader.ReadBlock(buffer, 0, n);

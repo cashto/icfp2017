@@ -26,12 +26,12 @@ namespace Icfp2017
             if (debug)
             {
                 parser = new Parser(
-                    new StreamReader(@"C:\Users\cashto\Documents\GitHub\icfp2017\Server\bin\Debug\debug60"), 
+                    new StreamReader(@"C:\Users\cashto\Documents\GitHub\icfp2017\Server\bin\Debug\debug60"),
                     Console.Out);
             }
             else
             {
-                parser = new Parser(Console.In, Console.Out);
+                parser = new Parser(Console.In, Console.Out) { debug = false };
                 parser.Write(new MeMessage() { me = "Ich bau mir einen Prototyp" });
                 parser.Read<YouMessage>();
             }
