@@ -32,7 +32,7 @@ namespace Icfp2017
             else
             {
                 parser = new Parser(Console.In, Console.Out);
-                parser.Write(new MeMessage() { me = "cashto" });
+                parser.Write(new MeMessage() { me = "Ich bau mir einen Prototyp" });
                 parser.Read<YouMessage>();
             }
 
@@ -56,7 +56,10 @@ namespace Icfp2017
             }
         }
 
-        delegate River Strategy(ServerMessage message, List<River> availableRivers);
+        delegate River Strategy(
+            MoveMessage message,
+            ServerMessage initialState,
+            List<River> availableRivers);
 
         static Move ComputeMove(
             ServerMessage message,
@@ -82,7 +85,7 @@ namespace Icfp2017
                 .Where(river => !takenRivers.ContainsKey(river))
                 .ToList();
 
-            var ans = strategy(message, availableRivers);
+            var ans = strategy(message.move, state.initialState, availableRivers);
 
             return new Move()
             {
@@ -97,7 +100,8 @@ namespace Icfp2017
         }
 
         static River RandomStrategy(
-            ServerMessage message,
+            MoveMessage message,
+            ServerMessage initialState,
             List<River> availableRivers)
         {
             var seed = 0xdeadbeef;
@@ -105,19 +109,18 @@ namespace Icfp2017
         }
 
         static River GreedyStrategy(
-            ServerMessage message,
+            MoveMessage message,
+            ServerMessage initialState,
             List<River> availableRivers)
         {
-            var state = message.state.ToObject<SolverState>();
+            var myId = initialState.punter.Value;
 
-            var myId = state.initialState.punter.Value;
-
-            var treeSet = new TreeSet(message.move.moves);
+            var treeSet = new TreeSet(message.moves);
 
             Func<River, int> ComputeRiverScore = (river) =>
             {
                 var newTreeSet = treeSet.AddRiver(myId, river);
-                return newTreeSet.Score(myId, state.initialState.map);
+                return newTreeSet.ComputeScore(myId, initialState.map);
             };
 
             return availableRivers
@@ -128,10 +131,43 @@ namespace Icfp2017
         }
         
         static River LightningStrategy(
-            ServerMessage message,
+            MoveMessage message,
+            ServerMessage initialState,
             List<River> availableRivers)
         {
-            return new River();
+            var myId = initialState.punter.Value;
+            var originalTreeSet = new TreeSet(message.moves);
+            var originalScore = originalTreeSet.ComputeScore(myId, initialState.map);
+            var originalLiberty = originalTreeSet.ComputeLiberty(initialState.map.rivers, myId);
+
+            // TODO: libertyDelta should take into account limitation of opponent's liberty.
+            var analysis = availableRivers.Select(river =>
+                {
+                    var newTreeSet = originalTreeSet.AddRiver(myId, river);
+                    return new
+                    {
+                        river = river,
+                        scoreDelta = newTreeSet.ComputeScore(myId, initialState.map) - originalScore,
+                        libertyDelta = newTreeSet.ComputeLiberty(initialState.map.rivers.Where(i => i.source != river.source || i.target != river.target), myId) - originalLiberty
+                    };
+                })
+            .ToList();
+
+            // Future: make this less than O(n^2) (probably doesn't matter because code that generates
+            // analysis is O(n^2)
+            var bestMove = analysis
+                .Select(i => new
+                {
+                    river = i.river,
+                    score =
+                        analysis.Count(j => i.scoreDelta >= j.scoreDelta) +
+                        analysis.Count(j => i.libertyDelta <= j.libertyDelta)
+                })
+                .OrderByDescending(i => i.score)
+                .Select(i => i.river)
+                .First();
+
+            return bestMove;
         }
     }
 }

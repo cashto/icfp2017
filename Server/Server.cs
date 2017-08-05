@@ -34,10 +34,10 @@ namespace Icfp2017
 
             var map = JsonConvert.DeserializeObject<Map>(File.ReadAllText(mapFile));
 
-            //Utils.ComputeMineDistances(map);
-
             var states = Enumerable.Range(0, ais.Count)
-                .Select(idx => RunAi<ReadyMessage>(ais[idx],
+                .Select(idx => RunAi<ReadyMessage>(
+                    0,
+                    ais[idx],
                     new ServerMessage()
                     {
                         punter = idx,
@@ -56,7 +56,9 @@ namespace Icfp2017
 
                 var aiIdx = moveNumber % ais.Count;
 
-                var move = RunAi<Move>(ais[aiIdx],
+                var move = RunAi<Move>(
+                    moveNumber,
+                    ais[aiIdx],
                     new ServerMessage()
                     {
                         move = new MoveMessage()
@@ -71,11 +73,12 @@ namespace Icfp2017
                 moves.Add(move);
             }
 
-            var treeSet = new TreeSet(moves);
             Utils.ComputeMineDistances(map);
 
+            var treeSet = new TreeSet(moves);
+
             var scores = Enumerable.Range(0, ais.Count)
-                .Select(idx => treeSet.Score(idx, map))
+                .Select(idx => treeSet.ComputeScore(idx, map))
                 .ToList();
 
             var output = new Output()
@@ -93,14 +96,14 @@ namespace Icfp2017
         }
 
         static T RunAi<T>(
+            int moveNumber,
             string ai,
             ServerMessage input)
         {
-            //using (var dbgWriter = new StreamWriter("debug"))
-            //{
-            //    var dbgParser = new Parser(null, dbgWriter);
-            //    dbgParser.Write(input);
-            //}
+            using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
+            {
+                new Parser(null, dbgWriter).Write(input);
+            }
 
             var process = new Process()
             {

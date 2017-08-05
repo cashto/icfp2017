@@ -170,6 +170,8 @@ namespace Icfp2017
 
     class TreeSet
     {
+        static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
+
         Dictionary<int, List<HashSet<int>>> trees;
 
         TreeSet(Dictionary<int, List<HashSet<int>>> trees)
@@ -234,15 +236,54 @@ namespace Icfp2017
             return ans;
         }
 
-        public int Score(
+        public int ComputeScore(
             int punterId,
             Map map)
         {
-            var trees = this.trees.ContainsKey(punterId) ? this.trees[punterId] : Utils.EmptyTreeList;
-
             return map.mines.Sum(mine =>
-                trees.Sum(tree =>
+                GetTrees(punterId).Sum(tree =>
                     tree.Contains(mine) ? tree.Sum(site => GetSquaredMineDistance(map.sites, mine, site)) : 0));
+        }
+
+        public int ComputeLiberty(
+            IEnumerable<River> rivers,
+            int punterId)
+        {
+            var sites = GetSites(punterId);
+
+            var distance = 0;
+            var ans = 0;
+
+            while (true)
+            {
+                var neighbors = Utils.FindNeighbors(sites, rivers);
+                if (!neighbors.Any())
+                {
+                    return ans;
+                }
+
+                ++distance;
+                ans += distance * neighbors.Count;
+
+                sites.UnionWith(neighbors);
+            }
+        }
+
+        public HashSet<int> GetSites(int punterId)
+        {
+            var ans = new HashSet<int>();
+
+            foreach (var tree in GetTrees(punterId))
+            {
+                ans.UnionWith(tree);
+            }
+
+            return ans;
+        }
+
+        List<HashSet<int>> GetTrees(int punterId)
+        {
+            return this.trees.ContainsKey(punterId) ? this.trees[punterId] : EmptyTreeList;
         }
 
         static int GetSquaredMineDistance(
@@ -254,17 +295,14 @@ namespace Icfp2017
                 .First(site => site.id == newSite).mineDistances
                 .FirstOrDefault(mineDistance => mineDistance.mineId == mine);
 
-            var dist = sites == null ? 0 : ans.distance;
+            var dist = ans == null ? 0 : ans.distance;
 
             return dist * dist;
         }
-
     }
 
     static class Utils
     {
-        public static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
-
         public static HashSet<int> FindNeighbors(
             HashSet<int> originalSet,
             IEnumerable<River> rivers)
