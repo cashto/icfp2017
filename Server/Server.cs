@@ -71,18 +71,11 @@ namespace Icfp2017
                 moves.Add(move);
             }
 
-            var allTrees = Utils.ComputeTrees(moves);
+            var treeSet = new TreeSet(moves);
             Utils.ComputeMineDistances(map);
 
             var scores = Enumerable.Range(0, ais.Count)
-                .Select(idx =>
-                {
-                    var trees = allTrees.ContainsKey(idx) ? allTrees[idx] : Utils.EmptyTreeList;
-
-                    return map.mines.Sum(mine =>
-                        trees.Sum(tree =>
-                            tree.Contains(mine) ? tree.Sum(site => Utils.GetSquaredMineDistance(map.sites, mine, site)) : 0));
-                })
+                .Select(idx => treeSet.Score(idx, map))
                 .ToList();
 
             var output = new Output()

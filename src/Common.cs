@@ -168,14 +168,20 @@ namespace Icfp2017
         }
     }
 
-    static class Utils
+    class TreeSet
     {
-        public static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
+        Dictionary<int, List<HashSet<int>>> trees;
 
-        public static Dictionary<int, List<HashSet<int>>> ComputeTrees(
-            List<Move> moves)
+        TreeSet(Dictionary<int, List<HashSet<int>>> trees)
         {
-            var ans = new Dictionary<int, List<HashSet<int>>>();
+            this.trees = trees.ToDictionary(
+                tree => tree.Key,
+                tree => tree.Value.Select(i => new HashSet<int>(i)).ToList());
+        }
+
+        public TreeSet(IEnumerable<Move> moves)
+        {
+            var ans = new TreeSet(new Dictionary<int, List<HashSet<int>>>());
 
             var claims = moves
                 .Select(move => move.claim)
@@ -183,37 +189,81 @@ namespace Icfp2017
 
             foreach (var claim in claims)
             {
-                if (!ans.ContainsKey(claim.punter))
-                {
-                    ans[claim.punter] = new List<HashSet<int>>();
-                }
+                ans = ans.AddRiver(
+                    claim.punter,
+                    new River() { source = claim.source, target = claim.target });
+            }
 
-                var trees = ans[claim.punter];
+            trees = ans.trees;
+        }
 
-                var matchingTrees = trees
-                    .Where(tree => tree.Contains(claim.source) || tree.Contains(claim.target))
-                    .ToList();
+        public TreeSet AddRiver(
+            int punterId,
+            River river)
+        {
+            var ans = new TreeSet(this.trees);
 
-                switch (matchingTrees.Count)
-                {
-                    case 0:
-                        trees.Add(new HashSet<int>() { claim.source, claim.target });
-                        break;
-                    case 1:
-                        matchingTrees.First().Add(claim.source);
-                        matchingTrees.First().Add(claim.target);
-                        break;
-                    case 2:
-                        matchingTrees.First().UnionWith(matchingTrees.Last());
-                        trees.Remove(matchingTrees.Last());
-                        break;
-                    default:
-                        throw new Exception("wtf?");
-                }
+            if (!ans.trees.ContainsKey(punterId))
+            {
+                ans.trees[punterId] = new List<HashSet<int>>();
+            }
+
+            var trees = ans.trees[punterId];
+
+            var matchingTrees = trees
+                .Where(tree => tree.Contains(river.source) || tree.Contains(river.target))
+                .ToList();
+
+            switch (matchingTrees.Count)
+            {
+                case 0:
+                    trees.Add(new HashSet<int>() { river.source, river.target });
+                    break;
+                case 1:
+                    matchingTrees.First().Add(river.source);
+                    matchingTrees.First().Add(river.target);
+                    break;
+                case 2:
+                    matchingTrees.First().UnionWith(matchingTrees.Last());
+                    trees.Remove(matchingTrees.Last());
+                    break;
+                default:
+                    throw new Exception("wtf?");
             }
 
             return ans;
         }
+
+        public int Score(
+            int punterId,
+            Map map)
+        {
+            var trees = this.trees.ContainsKey(punterId) ? this.trees[punterId] : Utils.EmptyTreeList;
+
+            return map.mines.Sum(mine =>
+                trees.Sum(tree =>
+                    tree.Contains(mine) ? tree.Sum(site => GetSquaredMineDistance(map.sites, mine, site)) : 0));
+        }
+
+        static int GetSquaredMineDistance(
+            List<Site> sites,
+            int mine,
+            int newSite)
+        {
+            var ans = sites
+                .First(site => site.id == newSite).mineDistances
+                .FirstOrDefault(mineDistance => mineDistance.mineId == mine);
+
+            var dist = sites == null ? 0 : ans.distance;
+
+            return dist * dist;
+        }
+
+    }
+
+    static class Utils
+    {
+        public static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
 
         public static void ComputeMineDistances(Map map)
         {
@@ -276,20 +326,6 @@ namespace Icfp2017
             }
 
             return ans;
-        }
-
-        public static int GetSquaredMineDistance(
-            List<Site> sites,
-            int mine,
-            int newSite)
-        {
-            var ans = sites
-                .First(site => site.id == newSite).mineDistances
-                .FirstOrDefault(mineDistance => mineDistance.mineId == mine);
-
-            var dist = sites == null ? 0 : ans.distance;
-
-            return dist * dist;
         }
     }
 }

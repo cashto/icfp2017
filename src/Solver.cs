@@ -112,42 +112,26 @@ namespace Icfp2017
 
             var myId = state.initialState.punter.Value;
 
-            var allTrees = Utils.ComputeTrees(message.move.moves);
+            var treeSet = new TreeSet(message.move.moves);
 
-            var trees = allTrees.ContainsKey(myId) ? allTrees[myId] : Utils.EmptyTreeList;
+            Func<River, int> ComputeRiverScore = (river) =>
+            {
+                var newTreeSet = treeSet.AddRiver(myId, river);
+                return newTreeSet.Score(myId, state.initialState.map);
+            };
 
             return availableRivers
-                .Select(river => new { river = river, score = ComputeRiverScore(state.initialState, trees, river) })
+                .Select(river => new { river = river, score = ComputeRiverScore(river) })
                 .OrderByDescending(riverScore => riverScore.score)
                 .Select(riverScore => riverScore.river)
                 .First();
         }
-
-        static int ComputeRiverScore(
-            ServerMessage initialState,
-            List<HashSet<int>> trees,
-            River river)
+        
+        static River LightningStrategy(
+            ServerMessage message,
+            List<River> availableRivers)
         {
-            var mines = initialState.map.mines;
-
-            var newSource = !trees.Any(tree => tree.Contains(river.source));
-            var newTarget = !trees.Any(tree => tree.Contains(river.target));
-
-            if (!newSource && !newTarget)
-            {
-                return 0;
-            }
-
-            if (newSource && newTarget)
-            {
-                return mines.Count(mine => mine == river.source || mine == river.target);
-            }
-
-            var newSite = newSource ? river.target : river.source;
-
-            return mines.Sum(mine =>
-                trees.Sum(tree => 
-                    tree.Contains(mine) ? Utils.GetSquaredMineDistance(initialState.map.sites, mine, newSite) : 0));
+            return new River();
         }
     }
 }
