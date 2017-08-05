@@ -41,12 +41,17 @@ namespace Icfp2017
     class Site
     {
         public int id;
+
+        [JsonProperty(PropertyName = "md")]
         public List<MineDistance> mineDistances;
     }
 
     class MineDistance
     {
+        [JsonProperty(PropertyName = "id")]
         public int mineId;
+
+        [JsonProperty(PropertyName = "d")]
         public int distance;
     }
 
@@ -250,32 +255,38 @@ namespace Icfp2017
             IEnumerable<River> rivers,
             Func<int, bool> pred)
         {
-            // Only count trees that include a mine.
-            var liveTrees = GetTrees(pred)
-                .Where(tree => mines.Any(mine => tree.Contains(mine)));
+            var trees = GetTrees(pred);
 
-            var sites = new HashSet<int>();
-            foreach (var tree in liveTrees)
+            // Count only trees that connect to a mine. If no tree contects to a mine,
+            // treat the mine as a single-element tree.
+            var liveTrees = mines.Select(mine =>
             {
-                sites.UnionWith(tree);
-            }
+                var tree = trees.FirstOrDefault(i => i.Contains(mine));
+                return tree != null ? tree : new HashSet<int>() { mine };
+            });
 
-            var distance = 0;
-            var ans = 0;
-
-            while (true)
+            Func<HashSet<int>, int> fn = (tree) =>
             {
-                var neighbors = Utils.FindNeighbors(sites, rivers);
-                if (!neighbors.Any())
+                var sites = new HashSet<int>(tree);
+                var distance = 0;
+                var ans = 0;
+
+                while (true)
                 {
-                    return ans;
+                    var neighbors = Utils.FindNeighbors(sites, rivers);
+                    if (!neighbors.Any())
+                    {
+                        return ans - 200 * (sites.Count);
+                    }
+
+                    ++distance;
+                    ans += distance * neighbors.Count;
+
+                    sites.UnionWith(neighbors);
                 }
+            };
 
-                ++distance;
-                ans += distance * neighbors.Count;
-
-                sites.UnionWith(neighbors);
-            }
+            return liveTrees.Sum(fn);
         }
 
         List<HashSet<int>> GetTrees(Func<int, bool> pred)

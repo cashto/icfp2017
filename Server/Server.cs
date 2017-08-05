@@ -52,7 +52,7 @@ namespace Icfp2017
 
             foreach (var moveNumber in Enumerable.Range(0, map.rivers.Count))
             {
-                Console.Error.WriteLine(moveNumber);
+                Console.Error.Write(".");
 
                 var aiIdx = moveNumber % ais.Count;
 
@@ -92,6 +92,7 @@ namespace Icfp2017
                 }
             };
 
+            Console.Error.WriteLine();
             Console.WriteLine(JsonConvert.SerializeObject(output, Formatting.Indented, Parser.SerializerSettings));
         }
 

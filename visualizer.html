@@ -58,8 +58,8 @@
         
         for (var i = 0; i < map.rivers.length; ++i) {
             var river = map.rivers[i];
-            var source = map.sites.filter(function(i) { return i.id == river.source; })[0];
-            var target = map.sites.filter(function(i) { return i.id == river.target; })[0];
+            var source = map.sites.filter(function(site) { return site.id == river.source; })[0];
+            var target = map.sites.filter(function(site) { return site.id == river.target; })[0];
             var ptSource = MapXy(source.x, source.y);
             var ptTarget = MapXy(target.x, target.y);
             ctx.beginPath();
@@ -77,7 +77,7 @@
         }
         
         for (var i = 0; i < map.mines.length; ++i) {
-            var site = map.sites[map.mines[i]];
+            var site = map.sites.filter(function(site) { return site.id == map.mines[i]; })[0];
             var pt = MapXy(site.x, site.y);
             ctx.fillStyle = "#ff6666";
             ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8);

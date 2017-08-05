@@ -135,32 +135,34 @@ namespace Icfp2017
             ServerMessage initialState,
             List<River> availableRivers)
         {
+            var earlyGame = (message.moves.Count - 2) * 10 < initialState.map.rivers.Count;
+            if (!earlyGame || initialState.map.rivers.Count > 400)
+            {
+                return GreedyStrategy(message, initialState, availableRivers);
+            }
+
             var myId = initialState.punter.Value;
             var map = initialState.map;
             var originalTreeSet = new TreeSet(message.moves);
-            var originalScore = originalTreeSet.ComputeScore(myId, map);
+            // var originalScore = originalTreeSet.ComputeScore(myId, map);
             var originalLiberty =
-                originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id != myId) -
-                originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
+                originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id != myId)
+                ; // -originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
 
             var analysis = availableRivers.Select(river =>
                 {
                     var newTreeSet = originalTreeSet.AddRiver(myId, river);
                     var newLiberty =
-                        originalTreeSet.ComputeLiberty(map.mines, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId) -
-                        newTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
+                        originalTreeSet.ComputeLiberty(map.mines, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId)
+                        ; // -newTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
                     return new
                     {
                         river = river,
-                        scoreDelta = newTreeSet.ComputeScore(myId, map) - originalScore,
+                        // scoreDelta = newTreeSet.ComputeScore(myId, map) - originalScore,
                         libertyDelta = newLiberty - originalLiberty
                     };
                 })
             .ToList();
-
-            var earlyGame = (message.moves.Count - 2) * 10 < initialState.map.rivers.Count;
-            var scoreWeight = earlyGame ? 0 : 1;
-            var libertyWeight = earlyGame ? 1 : 0;
 
             // Future: make this less than O(n^2) (probably doesn't matter because code that generates
             // analysis is O(n^2)
@@ -169,9 +171,9 @@ namespace Icfp2017
                 {
                     river = i.river,
                     score =
-                        scoreWeight * analysis.Count(j => i.scoreDelta >= j.scoreDelta) +
-                        libertyWeight * analysis.Count(j => i.libertyDelta >= j.libertyDelta),
-                    scoreDelta = i.scoreDelta,
+                        // analysis.Count(j => i.scoreDelta >= j.scoreDelta) +
+                        analysis.Count(j => i.libertyDelta >= j.libertyDelta),
+                    // scoreDelta = i.scoreDelta,
                     libertyDelta = i.libertyDelta
                 })
                 .OrderByDescending(i => i.score)
