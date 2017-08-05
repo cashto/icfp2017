@@ -265,67 +265,69 @@ namespace Icfp2017
     {
         public static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
 
-        public static void ComputeMineDistances(Map map)
+        public static HashSet<int> FindNeighbors(
+            HashSet<int> originalSet,
+            IEnumerable<River> rivers)
         {
-            var mineDistances = map.mines.ToDictionary(
-                    mine => mine,
-                    mine => ComputeMineDistance(map, mine));
+            var ans = new HashSet<int>();
 
-            foreach (Site site in map.sites)
+            foreach (var river in rivers)
             {
-                site.mineDistances = mineDistances
-                    .Where(mine => mine.Value.ContainsKey(site.id))
-                    .Select(mine => new MineDistance() { mineId = mine.Key, distance = mine.Value[site.id] })
-                    .ToList();
-            }
-        }
+                var hasSource = originalSet.Contains(river.source);
+                var hasTarget = originalSet.Contains(river.target);
 
-        static Dictionary<int, int> ComputeMineDistance(
-            Map map,
-            int mine)
-        {
-            var ans = new Dictionary<int, int>()
-            {
-                [mine] = 0
-            };
-
-            while (true)
-            {
-                var newAns = ans.ToDictionary(i => i.Key, i => i.Value);
-
-                foreach (var river in map.rivers)
+                if (hasSource && !hasTarget)
                 {
-                    var sourceDistance = TryGetValue(ans, river.source);
-                    var targetDistance = TryGetValue(ans, river.target);
-
-                    if (sourceDistance.HasValue && !targetDistance.HasValue)
-                    {
-                        newAns[river.target] = sourceDistance.Value + 1;
-                    }
-                    else if (!sourceDistance.HasValue && targetDistance.HasValue)
-                    {
-                        newAns[river.source] = targetDistance.Value + 1;
-                    }
+                    ans.Add(river.target);
                 }
-
-                if (newAns.Count == ans.Count)
+                else if (!hasSource && hasTarget)
                 {
-                    return ans;
+                    ans.Add(river.source);
                 }
-
-                ans = newAns;
-            }
-        }
-
-        static int? TryGetValue(Dictionary<int, int> dict, int key)
-        {
-            int ans;
-            if (!dict.TryGetValue(key, out ans))
-            {
-                return null;
             }
 
             return ans;
+        }
+
+        public static void ComputeMineDistances(Map map)
+        {
+            foreach (Site site in map.sites)
+            {
+                site.mineDistances = new List<MineDistance>();
+            }
+
+            foreach (int mine in map.mines)
+            {
+                ComputeMineDistance(map, mine);
+            }
+        }
+
+        static void ComputeMineDistance(
+            Map map,
+            int mine)
+        {
+            int distance = 0;
+            var sites = new HashSet<int>() { mine };
+
+            while (true)
+            {
+                var neighbors = FindNeighbors(sites, map.rivers);
+                if (!neighbors.Any())
+                {
+                    return;
+                }
+
+                ++distance;
+
+                foreach (var site in neighbors)
+                {
+                    map.sites
+                        .First(i => i.id == site)
+                        .mineDistances.Add(new MineDistance() { mineId = mine, distance = distance});
+                }
+
+                sites.UnionWith(neighbors);
+            }
         }
     }
 }
