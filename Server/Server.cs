@@ -100,10 +100,10 @@ namespace Icfp2017
             string ai,
             ServerMessage input)
         {
-            using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
-            {
-                new Parser(null, dbgWriter).Write(input);
-            }
+            //using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
+            //{
+            //    new Parser(null, dbgWriter).Write(input);
+            //}
 
             var process = new Process()
             {

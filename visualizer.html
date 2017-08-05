@@ -58,8 +58,8 @@
         
         for (var i = 0; i < map.rivers.length; ++i) {
             var river = map.rivers[i];
-            var source = map.sites[river.source];
-            var target = map.sites[river.target];
+            var source = map.sites.filter(function(i) { return i.id == river.source; })[0];
+            var target = map.sites.filter(function(i) { return i.id == river.target; })[0];
             var ptSource = MapXy(source.x, source.y);
             var ptTarget = MapXy(target.x, target.y);
             ctx.beginPath();

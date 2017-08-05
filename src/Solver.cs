@@ -21,12 +21,12 @@ namespace Icfp2017
             Parser parser;
 
             var debug = false;
-            Strategy strategy = RandomStrategy;
+            Strategy strategy = LightningStrategy;
 
             if (debug)
             {
                 parser = new Parser(
-                    new StreamReader(@"C:\Users\cashto\Documents\GitHub\icfp2017\Server\bin\Debug\debug"), 
+                    new StreamReader(@"C:\Users\cashto\Documents\GitHub\icfp2017\Server\bin\Debug\debug60"), 
                     Console.Out);
             }
             else
@@ -136,38 +136,48 @@ namespace Icfp2017
             List<River> availableRivers)
         {
             var myId = initialState.punter.Value;
+            var map = initialState.map;
             var originalTreeSet = new TreeSet(message.moves);
-            var originalScore = originalTreeSet.ComputeScore(myId, initialState.map);
-            var originalLiberty = originalTreeSet.ComputeLiberty(initialState.map.rivers, myId);
+            var originalScore = originalTreeSet.ComputeScore(myId, map);
+            var originalLiberty =
+                originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id != myId) -
+                originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
 
-            // TODO: libertyDelta should take into account limitation of opponent's liberty.
             var analysis = availableRivers.Select(river =>
                 {
                     var newTreeSet = originalTreeSet.AddRiver(myId, river);
+                    var newLiberty =
+                        originalTreeSet.ComputeLiberty(map.mines, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId) -
+                        newTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
                     return new
                     {
                         river = river,
-                        scoreDelta = newTreeSet.ComputeScore(myId, initialState.map) - originalScore,
-                        libertyDelta = newTreeSet.ComputeLiberty(initialState.map.rivers.Where(i => i.source != river.source || i.target != river.target), myId) - originalLiberty
+                        scoreDelta = newTreeSet.ComputeScore(myId, map) - originalScore,
+                        libertyDelta = newLiberty - originalLiberty
                     };
                 })
             .ToList();
 
+            var earlyGame = (message.moves.Count - 2) * 10 < initialState.map.rivers.Count;
+            var scoreWeight = earlyGame ? 0 : 1;
+            var libertyWeight = earlyGame ? 1 : 0;
+
             // Future: make this less than O(n^2) (probably doesn't matter because code that generates
             // analysis is O(n^2)
-            var bestMove = analysis
+            var rankedAnalysis = analysis
                 .Select(i => new
                 {
                     river = i.river,
                     score =
-                        analysis.Count(j => i.scoreDelta >= j.scoreDelta) +
-                        analysis.Count(j => i.libertyDelta <= j.libertyDelta)
+                        scoreWeight * analysis.Count(j => i.scoreDelta >= j.scoreDelta) +
+                        libertyWeight * analysis.Count(j => i.libertyDelta >= j.libertyDelta),
+                    scoreDelta = i.scoreDelta,
+                    libertyDelta = i.libertyDelta
                 })
                 .OrderByDescending(i => i.score)
-                .Select(i => i.river)
-                .First();
+                .ToList();
 
-            return bestMove;
+            return rankedAnalysis.First().river;
         }
     }
 }

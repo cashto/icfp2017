@@ -241,15 +241,24 @@ namespace Icfp2017
             Map map)
         {
             return map.mines.Sum(mine =>
-                GetTrees(punterId).Sum(tree =>
+                GetTrees(id => id == punterId).Sum(tree =>
                     tree.Contains(mine) ? tree.Sum(site => GetSquaredMineDistance(map.sites, mine, site)) : 0));
         }
 
         public int ComputeLiberty(
+            IEnumerable<int> mines,
             IEnumerable<River> rivers,
-            int punterId)
+            Func<int, bool> pred)
         {
-            var sites = GetSites(punterId);
+            // Only count trees that include a mine.
+            var liveTrees = GetTrees(pred)
+                .Where(tree => mines.Any(mine => tree.Contains(mine)));
+
+            var sites = new HashSet<int>();
+            foreach (var tree in liveTrees)
+            {
+                sites.UnionWith(tree);
+            }
 
             var distance = 0;
             var ans = 0;
@@ -269,21 +278,12 @@ namespace Icfp2017
             }
         }
 
-        public HashSet<int> GetSites(int punterId)
+        List<HashSet<int>> GetTrees(Func<int, bool> pred)
         {
-            var ans = new HashSet<int>();
-
-            foreach (var tree in GetTrees(punterId))
-            {
-                ans.UnionWith(tree);
-            }
-
-            return ans;
-        }
-
-        List<HashSet<int>> GetTrees(int punterId)
-        {
-            return this.trees.ContainsKey(punterId) ? this.trees[punterId] : EmptyTreeList;
+            return this.trees
+                .Where(i => pred(i.Key))
+                .SelectMany(i => i.Value)
+                .ToList();
         }
 
         static int GetSquaredMineDistance(
