@@ -266,7 +266,7 @@ namespace Icfp2017
         }
 
         public int ComputeLiberty(
-            IEnumerable<int> mines,
+            Map map,
             IEnumerable<River> rivers,
             Func<int, bool> pred)
         {
@@ -274,34 +274,20 @@ namespace Icfp2017
 
             // Count only trees that connect to a mine. If no tree contects to a mine,
             // treat the mine as a single-element tree.
-            var liveTrees = mines.Select(mine =>
+            var liveTrees = map.mines.Select(mine =>
             {
                 var tree = trees.FirstOrDefault(i => i.Contains(mine));
                 return tree != null ? tree : new HashSet<int>() { mine };
             });
 
-            Func<HashSet<int>, int> fn = (tree) =>
+            return liveTrees.Sum(tree =>
             {
-                var sites = new HashSet<int>(tree);
-                var distance = 0;
-                var ans = 0;
+                var search = Utils.BreadthFirstSearch(tree, rivers).ToList();
 
-                while (true)
-                {
-                    var neighbors = Utils.FindNeighbors(sites, rivers);
-                    if (!neighbors.Any())
-                    {
-                        return ans - 200 * (sites.Count);
-                    }
+                var disconnectedSites = map.sites.Count - search.Count - tree.Count;
 
-                    ++distance;
-                    ans += distance * neighbors.Count;
-
-                    sites.UnionWith(neighbors);
-                }
-            };
-
-            return liveTrees.Sum(fn);
+                return search.Sum(i => i.Item1) + disconnectedSites * map.sites.Count;
+            });
         }
 
         List<HashSet<int>> GetTrees(Func<int, bool> pred)
@@ -329,32 +315,10 @@ namespace Icfp2017
 
     static class Utils
     {
-        public static HashSet<int> FindNeighbors(
-            HashSet<int> originalSet,
-            IEnumerable<River> rivers)
-        {
-            var ans = new HashSet<int>();
-
-            foreach (var river in rivers)
-            {
-                var hasSource = originalSet.Contains(river.source);
-                var hasTarget = originalSet.Contains(river.target);
-
-                if (hasSource && !hasTarget)
-                {
-                    ans.Add(river.target);
-                }
-                else if (!hasSource && hasTarget)
-                {
-                    ans.Add(river.source);
-                }
-            }
-
-            return ans;
-        }
-
         public static void ComputeMineDistances(Map map)
         {
+            var sites = map.sites.ToDictionary(i => i.id, i => i);
+
             foreach (Site site in map.sites)
             {
                 site.mineDistances = new List<MineDistance>();
@@ -362,36 +326,71 @@ namespace Icfp2017
 
             foreach (int mine in map.mines)
             {
-                ComputeMineDistance(map, mine);
+                foreach (var i in BreadthFirstSearch(new HashSet<int>() { mine }, map.rivers))
+                {
+                    sites[i.Item1].mineDistances.Add(
+                        new MineDistance()
+                        {
+                            mineId = mine,
+                            distance = i.Item2
+                        });
+                }
             }
         }
 
-        static void ComputeMineDistance(
-            Map map,
-            int mine)
+        public static IEnumerable<Tuple<int, int>> BreadthFirstSearch(
+            HashSet<int> startingSites,
+            IEnumerable<River> rivers)
         {
-            int distance = 0;
-            var sites = new HashSet<int>() { mine };
+            var adjacencyMap = BuildAdjacencyMap(rivers);
 
-            while (true)
+            var distances = startingSites.ToDictionary(i => i, i => 0);
+
+            var queue = new Queue<int>(startingSites);
+
+            while (queue.Any())
             {
-                var neighbors = FindNeighbors(sites, map.rivers);
-                if (!neighbors.Any())
+                var item = queue.Dequeue();
+                var distance = distances[item];
+
+                HashSet<int> neighbors;
+                if (adjacencyMap.TryGetValue(item, out neighbors))
                 {
-                    return;
+                    foreach (var neighbor in neighbors)
+                    {
+                        if (!distances.ContainsKey(neighbor))
+                        {
+                            distances[neighbor] = distance + 1;
+                            queue.Enqueue(neighbor);
+                            yield return Tuple.Create(neighbor, distance + 1);
+                        }
+                    }
                 }
-
-                ++distance;
-
-                foreach (var site in neighbors)
-                {
-                    map.sites
-                        .First(i => i.id == site)
-                        .mineDistances.Add(new MineDistance() { mineId = mine, distance = distance});
-                }
-
-                sites.UnionWith(neighbors);
             }
+        }
+
+        static Dictionary<int, HashSet<int>> BuildAdjacencyMap(
+            IEnumerable<River> rivers)
+        {
+            var ans = new Dictionary<int, HashSet<int>>();
+
+            Action<int, int> add = (source, target) =>
+            {
+                if (!ans.ContainsKey(source))
+                {
+                    ans[source] = new HashSet<int>();
+                }
+
+                ans[source].Add(target);
+            };
+
+            foreach (var river in rivers)
+            {
+                add(river.source, river.target);
+                add(river.target, river.source);
+            }
+
+            return ans;
         }
     }
 }

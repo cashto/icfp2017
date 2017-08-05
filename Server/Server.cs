@@ -52,9 +52,14 @@ namespace Icfp2017
 
             foreach (var moveNumber in Enumerable.Range(0, map.rivers.Count))
             {
-                Console.Error.Write(".");
-
                 var aiIdx = moveNumber % ais.Count;
+
+                var ch =
+                    aiIdx == 0 ? '.' :
+                    aiIdx == 1 ? ':' :
+                    '*';
+
+                Console.Error.Write(ch);
 
                 var move = RunAi<Move>(
                     moveNumber,
@@ -101,6 +106,8 @@ namespace Icfp2017
             string ai,
             ServerMessage input)
         {
+            //Console.Error.WriteLine($"+RunAi({moveNumber}, {ai}, ServerMessage)");
+
             //using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
             //{
             //    new Parser(null, dbgWriter).Write(input);
@@ -127,14 +134,24 @@ namespace Icfp2017
 
             var parser = new Parser(process.StandardOutput, process.StandardInput);
 
-            var me = parser.Read<MeMessage>();
-            parser.Write(new YouMessage() { you = me.me });
+            try
+            {
+                var me = parser.Read<MeMessage>();
+                parser.Write(new YouMessage() { you = me.me });
 
-            parser.Write(input);
-            process.StandardInput.Close();
-            var ans = parser.Read<T>();
-            tcs.Task.Wait();
-            return ans;
+                parser.Write(input);
+                process.StandardInput.Close();
+                var ans = parser.Read<T>();
+                tcs.Task.Wait();
+
+                return ans;
+            }
+            catch (Exception)
+            {
+                var stderr = process.StandardError.ReadToEnd();
+                Console.Error.WriteLine($"\nException in RunAi({moveNumber}, {ai}, ServerMessage), StdErr = {stderr}------------------");
+                throw;
+            }
         }
     }
 }

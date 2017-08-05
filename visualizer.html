@@ -27,6 +27,7 @@
         map = JSON.parse(file.ReadAll());
         file.Close();
         
+        output.verbose.moves = output.verbose.moves.slice(2);
         var xs = map.sites.map(function(i) { return i.x; });
         var ys = map.sites.map(function(i) { return i.y; });
 
@@ -136,7 +137,7 @@
 <input type=button value='|&lt;' onclick='Move(0)'>
 <input type=button value='&lt;&lt;' onclick='Move(cursor - 10)'>
 <input type=button value='&lt;' onclick='Move(cursor - 1)'>
-<span id=spanCursor>0</span>
+<span id=spanCursor style='display: inline; width: 100px'>0</span>
 <input type=button value='&gt;' onclick='Move(cursor + 1)'>
 <input type=button value='&gt;&gt;' onclick='Move(cursor + 10)'>
 <input type=button value='&gt;|' onclick='Move(9e9)'>

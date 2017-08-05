@@ -136,7 +136,7 @@ namespace Icfp2017
             List<River> availableRivers)
         {
             var earlyGame = (message.moves.Count - 2) * 10 < initialState.map.rivers.Count;
-            if (!earlyGame || initialState.map.rivers.Count > 400)
+            if (!earlyGame)
             {
                 return GreedyStrategy(message, initialState, availableRivers);
             }
@@ -146,14 +146,14 @@ namespace Icfp2017
             var originalTreeSet = new TreeSet(message.moves);
             // var originalScore = originalTreeSet.ComputeScore(myId, map);
             var originalLiberty =
-                originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id != myId)
+                originalTreeSet.ComputeLiberty(map, availableRivers, id => id != myId)
                 ; // -originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
 
             var analysis = availableRivers.Select(river =>
                 {
                     var newTreeSet = originalTreeSet.AddRiver(myId, river);
                     var newLiberty =
-                        originalTreeSet.ComputeLiberty(map.mines, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId)
+                        originalTreeSet.ComputeLiberty(map, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId)
                         ; // -newTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
                     return new
                     {
