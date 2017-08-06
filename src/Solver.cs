@@ -40,7 +40,11 @@ namespace Icfp2017
 
             if (message.move != null)
             {
-                parser.Write(ComputeMove(message, V4Strategy));
+                // Make a move
+                var state = message.state.ToObject<SolverState>();
+                var ans = V4Strategy(message.move, state);
+                ans.state = message.state;
+                parser.Write(ans);
             }
             else if (message.punter != null)
             {
@@ -59,35 +63,6 @@ namespace Icfp2017
             }
         }
 
-        delegate Move Strategy(
-            MoveMessage message,
-            SolverState solverState,
-            List<River> availableRivers);
-
-        static Move ComputeMove(
-            ServerMessage message,
-            Strategy strategy)
-        {
-            var state = message.state.ToObject<SolverState>();
-
-            var myId = state.initialState.punter.Value;
-
-            var initialMap = state.initialState.map;
-
-            var takenRivers = Utils.ConvertMovesToRivers(initialMap, message.move.moves, (id) => true)
-                .ToDictionary(river => river, river => true);
-
-            var availableRivers = initialMap.rivers
-                .Where(river => !takenRivers.ContainsKey(river))
-                .ToList();
-
-            var ans = strategy(message.move, state, availableRivers);
-
-            ans.state = message.state;
-
-            return ans;
-        }
-        
         static Move CreateClaimMove(
             int myId, 
             River river)
@@ -103,13 +78,39 @@ namespace Icfp2017
             };
         }
 
+        static Move CreateOptionMove(
+            int myId,
+            River river)
+        {
+            return new Move()
+            {
+                option = new OptionMove()
+                {
+                    punter = myId,
+                    source = river.source,
+                    target = river.target,
+                }
+            };
+        }
+
         static Move V4Strategy(
             MoveMessage message,
-            SolverState solverState,
-            List<River> availableRivers)
+            SolverState solverState)
         {
             var myId = solverState.initialState.punter.Value;
+
             var initialMap = solverState.initialState.map;
+
+            var takenRivers = Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => true)
+                .ToLookup(river => river, river => true);
+
+            var availableRivers = initialMap.rivers
+                .Where(river => !takenRivers.Contains(river))
+                .ToList();
+
+            var canUseOptions =
+                solverState.initialState.settings.options &&
+                message.moves.Count(move => move.option != null && move.option.punter == myId) < initialMap.mines.Count;
 
             // if we see a choke, take it
             var punters =
@@ -118,14 +119,27 @@ namespace Icfp2017
 
             foreach (var punter in punters)
             {
+                var availableOptions = new List<River>();
+                if (canUseOptions && punter == myId)
+                {
+                    var takenOptions = Utils.ConvertMovesToRivers(initialMap, message.moves.Where(move => move.option != null), (id) => true)
+                        .ToLookup(river => river, river => true);
+
+                    availableOptions =
+                        Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id != myId)
+                        .Where(river => !takenOptions.Contains(river))
+                        .ToList();
+                }
+
                 var chokes = FindChokes(
                     initialMap.mines,
                     Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(), 
-                    availableRivers);
+                    availableRivers.Concat(availableOptions).ToList());
 
                 if (chokes.Any())
                 {
-                    return CreateClaimMove(myId, chokes[0][0]);
+                    var river = chokes[0][0];
+                    return availableOptions.Contains(river) ? CreateOptionMove(myId, river) : CreateClaimMove(myId, river);
                 }
             }
 

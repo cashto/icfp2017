@@ -99,7 +99,8 @@
         ctx.setLineDash([]);
     
         var item = output.verbose.moves.slice(0, cursor).filter(function(move) {
-            return move.claim != null && move.claim.source == river.source && move.claim.target == river.target;
+            return move.claim  != null && move.claim.source  == river.source && move.claim.target  == river.target ||
+                   move.option != null && move.option.source == river.source && move.option.target == river.target 
         });
         
         if (item.length == 0) {
@@ -109,9 +110,11 @@
         }
         
         ctx.lineWidth = 2;
-        ctx.strokeStyle = (item[0].claim.punter == 0) ? "#ff0000" : "#ffff00";
+        ctx.strokeStyle = 
+            (item[item.length - 1].claim == null) ? "#ff9900" :
+            (item[item.length - 1].claim.punter == 0) ? "#ff0000" : "#ffff00";
 
-        if (output.verbose.moves[cursor - 1] !== item[0]) {
+        if (output.verbose.moves[cursor - 1] !== item[item.length - 1]) {
             ctx.setLineDash([2, 2]);
         }
     }

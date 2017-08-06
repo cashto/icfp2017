@@ -441,12 +441,12 @@ namespace Icfp2017
             IEnumerable<Move> moves,
             Func<int, bool> idFilter)
         {
-            var validRivers = map.rivers.ToDictionary(river => river, river => true);
+            var validRivers = map.rivers.ToLookup(river => river, river => true);
 
             Func<int, int, River> createRiver = (source, target) =>
             {
                 River ans = new River() { source = source, target = target };
-                return validRivers.ContainsKey(ans) ? ans : new River() { source = target, target = source };
+                return validRivers.Contains(ans) ? ans : new River() { source = target, target = source };
             };
 
             foreach (var move in moves)

@@ -42,7 +42,11 @@ namespace Icfp2017
                     {
                         punter = idx,
                         punters = ais.Count,
-                        map = map
+                        map = map,
+                        settings = new Settings()
+                        {
+                            options = true
+                        }
                     }).state)
                 .ToList();
 
