@@ -21,7 +21,7 @@ namespace Icfp2017
             Parser parser;
             string debug = null;
 
-            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug5";
+            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug45";
 
             if (debug != null)
             {
@@ -96,87 +96,44 @@ namespace Icfp2017
             var initialMap = solverState.initialState.map;
 
             // if we see a choke, take it
-            var myRivers = message.moves
-                .Where(i => i.claim != null && i.claim.punter == myId)
-                .Select(i => new River { source = i.claim.source, target = i.claim.target })
-                .ToList();
+            var punters =
+                new List<int>() { myId }.Concat(
+                Enumerable.Range(0, solverState.initialState.punters.Value).Where(i => i != myId));
 
-            var chokes = FindChokes(initialMap, myRivers, availableRivers);
-
-            if (chokes.Any())
+            foreach (var punter in punters)
             {
-                return chokes[0][0];
+                var myRivers = message.moves
+                    .Where(i => i.claim != null && i.claim.punter == punter)
+                    .Select(i => new River { source = i.claim.source, target = i.claim.target })
+                    .ToList();
+
+                var chokes = FindChokes(initialMap, myRivers, availableRivers);
+
+                if (chokes.Any())
+                {
+                    return chokes[0][0];
+                }
             }
 
             // otherwise play a move that brings two close big trees closer together (TODO)
-            var adjMap = Utils.BuildAdjacencyMap(availableRivers);
+            var trees = new TreeSet(message.moves, initialMap.mines, (claim) => claim.punter == myId);
 
-            var trees = (new TreeSet(message.moves)).GetTrees(i => i == myId);
-            trees.AddRange(initialMap.mines
-                .Where(mine => !trees.Any(tree => tree.Contains(mine)))
-                .Select(mine => new HashSet<int>() { mine }));
-
-            // otherwise just play a move that increases the number of neighbors or adds more points
+            // otherwise just play a move that increases liberty or score
             var rankedRivers = availableRivers
+                .Where(river => trees.Contains(river.source) || trees.Contains(river.target))
+                .DefaultIfEmpty(availableRivers.First())
                 .Select(river => new
                 {
                     river = river,
-                    neighbors = CountNewNeighbors(river, trees, adjMap),
-                    score = CountNewPoints(river, trees, initialMap)
+                    liberty = trees.AddRiver(river).ComputeLiberty(availableRivers),
+                    score = trees.AddRiver(river).ComputeScore(initialMap)
                 })
-                .OrderByDescending(i => i.neighbors)
+                .OrderByDescending(i => i.liberty)
                 .ThenByDescending(i => i.score);
 
             return rankedRivers
                 .Select(i => i.river)
                 .First();
-        }
-
-        static int CountNewNeighbors(
-            River river,
-            List<HashSet<int>> trees,
-            Dictionary<int, HashSet<int>> adjMap)
-        {
-            bool sourceInTree = trees.Any(i => i.Contains(river.source));
-            bool targetInTree = trees.Any(i => i.Contains(river.target));
-
-            if (sourceInTree && targetInTree || !sourceInTree && !targetInTree)
-            {
-                return 0;
-            }
-
-            var newSite = sourceInTree ? river.target : river.source;
-
-            if (!adjMap.ContainsKey(newSite))
-            {
-                return 0;
-            }
-
-            return adjMap[newSite].Count(site => !trees.Any(tree => tree.Contains(site)));
-        }
-
-        static int CountNewPoints(
-            River river,
-            List<HashSet<int>> trees,
-            Map map)
-        {
-            bool sourceInTree = trees.Any(i => i.Contains(river.source));
-            bool targetInTree = trees.Any(i => i.Contains(river.target));
-
-            if (sourceInTree && targetInTree || !sourceInTree && !targetInTree)
-            {
-                return 0;
-            }
-
-            var oldSite = sourceInTree ? river.source : river.target;
-            var newSite = sourceInTree ? river.target : river.source;
-            var whichTree = trees.First(tree => tree.Contains(oldSite));
-
-            return map.mines
-                .Where(mine => whichTree.Contains(mine))
-                .Select(mine => Utils.GetSquaredMineDistance(map.sites, mine, newSite))
-                .DefaultIfEmpty(0)
-                .Sum();
         }
 
         static List<List<River>> FindChokes(

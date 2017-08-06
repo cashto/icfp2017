@@ -80,10 +80,8 @@ namespace Icfp2017
 
             Utils.ComputeMineDistances(map);
 
-            var treeSet = new TreeSet(moves);
-
             var scores = Enumerable.Range(0, ais.Count)
-                .Select(idx => treeSet.ComputeScore(idx, map))
+                .Select(idx => (new TreeSet(moves, moveFilter: (claim) => claim.punter == idx)).ComputeScore(map))
                 .ToList();
 
             var output = new Output()
