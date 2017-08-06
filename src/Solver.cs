@@ -32,15 +32,22 @@ namespace Icfp2017
             else
             {
                 parser = new Parser(Console.In, Console.Out) { debug = false };
-                parser.Write(new MeMessage() { me = "Ich bau mir einen Prototyp" });
+                parser.Write(new MeMessage() { me = "Prototyp by cashto" });
                 parser.Read<YouMessage>();
             }
 
             var message = parser.Read<ServerMessage>();
- 
-            if (message.punter != null)
+
+            if (message.move != null)
             {
+                parser.Write(ComputeMove(message, V4Strategy));
+            }
+            else if (message.punter != null)
+            {
+                // Initial setup
                 Utils.ComputeMineDistances(message.map);
+
+                message.settings = message.settings ?? new Settings();
 
                 parser.Write(new SetupResponse()
                 {
@@ -50,13 +57,9 @@ namespace Icfp2017
                         new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore })
                 });
             }
-            else if (message.move != null)
-            {
-                parser.Write(ComputeMove(message, V4Strategy));
-            }
         }
 
-        delegate River Strategy(
+        delegate Move Strategy(
             MoveMessage message,
             SolverState solverState,
             List<River> availableRivers);
@@ -69,25 +72,38 @@ namespace Icfp2017
 
             var myId = state.initialState.punter.Value;
 
-            var availableRivers = Utils.RemoveRivers(
-                state.initialState.map.rivers,
-                message.move.moves.Where(move => move.claim != null));
+            var initialMap = state.initialState.map;
+
+            var takenRivers = Utils.ConvertMovesToRivers(initialMap, message.move.moves, (id) => true)
+                .ToDictionary(river => river, river => true);
+
+            var availableRivers = initialMap.rivers
+                .Where(river => !takenRivers.ContainsKey(river))
+                .ToList();
 
             var ans = strategy(message.move, state, availableRivers);
 
+            ans.state = message.state;
+
+            return ans;
+        }
+        
+        static Move CreateClaimMove(
+            int myId, 
+            River river)
+        {
             return new Move()
             {
                 claim = new ClaimMove()
                 {
                     punter = myId,
-                    source = ans.source,
-                    target = ans.target,
-                },
-                state = message.state
+                    source = river.source,
+                    target = river.target,
+                }
             };
         }
-        
-        static River V4Strategy(
+
+        static Move V4Strategy(
             MoveMessage message,
             SolverState solverState,
             List<River> availableRivers)
@@ -102,23 +118,22 @@ namespace Icfp2017
 
             foreach (var punter in punters)
             {
-                var myRivers = message.moves
-                    .Where(i => i.claim != null && i.claim.punter == punter)
-                    .Select(i => new River { source = i.claim.source, target = i.claim.target })
-                    .ToList();
-
-                var chokes = FindChokes(initialMap.mines, myRivers, availableRivers);
+                var chokes = FindChokes(
+                    initialMap.mines,
+                    Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(), 
+                    availableRivers);
 
                 if (chokes.Any())
                 {
-                    return chokes[0][0];
+                    return CreateClaimMove(myId, chokes[0][0]);
                 }
             }
 
-            // otherwise play a move that brings two close big trees closer together (TODO)
-            var trees = new TreeSet(message.moves, initialMap.mines, (claim) => claim.punter == myId);
-
             // otherwise just play a move that joins two trees, increases liberty, or increases score
+            var trees = new TreeSet(
+                Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == myId),
+                initialMap.mines);
+
             var riversToConsider = availableRivers
                 .Where(river => trees.Contains(river.source) || trees.Contains(river.target))
                 .DefaultIfEmpty(availableRivers.First());
@@ -132,7 +147,7 @@ namespace Icfp2017
                 orderby treeCount, liberty descending, score descending
                 select new { river = river, liberty = liberty, score = score, treeCount = treeCount };
 
-            return rankedRivers.First().river;
+            return CreateClaimMove(myId, rankedRivers.First().river);
         }
 
         static List<List<River>> FindChokes(

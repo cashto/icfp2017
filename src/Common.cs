@@ -69,7 +69,15 @@ namespace Icfp2017
         public int? punter;
         public int? punters;
         public Map map;
+        public Settings settings;
         public JObject state;
+    }
+
+    class Settings
+    {
+        public bool futures;
+        public bool options;
+        public bool splurges;
     }
 
     class MoveMessage
@@ -88,6 +96,8 @@ namespace Icfp2017
     {
         public ClaimMove claim;
         public PassMove pass;
+        public SplurgeMove splurge;
+        public OptionMove option;
         public JObject state;
     }
 
@@ -100,6 +110,15 @@ namespace Icfp2017
     {
         public int source;
         public int target;
+    }
+
+    class SplurgeMove : PassMove
+    {
+        public List<int> route;
+    }
+
+    class OptionMove : ClaimMove
+    {
     }
 
     class Score
@@ -197,20 +216,6 @@ namespace Icfp2017
         TreeSet(TreeSet other)
         {
             Trees = other.Trees.Select(i => new HashSet<int>(i)).ToList();
-        }
-
-        public TreeSet(
-            IEnumerable<Move> moves,
-            IEnumerable<int> mines = null,
-            Func<ClaimMove, bool> moveFilter = null) 
-        : this(
-              moves
-                  .Select(move => move.claim)
-                  .Where(claim => claim != null)
-                  .Where(claim => moveFilter == null ? true : moveFilter(claim))
-                  .Select(claim => new River() { source = claim.source, target = claim.target }),
-              mines)
-        {
         }
 
         public TreeSet(
@@ -431,22 +436,50 @@ namespace Icfp2017
             return null;
         }
 
-        public static List<River> RemoveRivers(
-            IEnumerable<River> rivers,
-            IEnumerable<Move> riversToRemove)
+        public static IEnumerable<River> ConvertMovesToRivers(
+            Map map,
+            IEnumerable<Move> moves,
+            Func<int, bool> idFilter)
         {
-            var takenRivers = riversToRemove
-                .ToDictionary(
-                    move => new River()
-                    {
-                        source = move.claim.source,
-                        target = move.claim.target
-                    },
-                    move => true);
+            var validRivers = map.rivers.ToDictionary(river => river, river => true);
 
-            return rivers
-                .Where(river => !takenRivers.ContainsKey(river))
-                .ToList();
+            Func<int, int, River> createRiver = (source, target) =>
+            {
+                River ans = new River() { source = source, target = target };
+                return validRivers.ContainsKey(ans) ? ans : new River() { source = target, target = source };
+            };
+
+            foreach (var move in moves)
+            {
+                if (move.claim != null)
+                {
+                    if (idFilter(move.claim.punter))
+                    {
+                        yield return createRiver(move.claim.source, move.claim.target);
+                    }
+                }
+                else if (move.option != null)
+                {
+                    if (idFilter(move.option.punter))
+                    {
+                        yield return createRiver(move.option.source, move.option.target);
+                    }
+                }
+                else if (move.splurge != null)
+                {
+                    if (idFilter(move.splurge.punter))
+                    {
+                        var rivers = move.splurge.route.Zip(
+                            move.splurge.route.Skip(1),
+                            (source, target) => createRiver(source, target));
+
+                        foreach (var river in rivers)
+                        {
+                            yield return river;
+                        }
+                    }
+                }
+            }
         }
     }
 }

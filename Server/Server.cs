@@ -81,7 +81,7 @@ namespace Icfp2017
             Utils.ComputeMineDistances(map);
 
             var scores = Enumerable.Range(0, ais.Count)
-                .Select(idx => (new TreeSet(moves, moveFilter: (claim) => claim.punter == idx)).ComputeScore(map))
+                .Select(idx => (new TreeSet(Utils.ConvertMovesToRivers(map, moves, (id) => id == idx))).ComputeScore(map))
                 .ToList();
 
             var output = new Output()
