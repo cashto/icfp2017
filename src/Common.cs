@@ -262,54 +262,15 @@ namespace Icfp2017
         {
             return map.mines.Sum(mine =>
                 GetTrees(id => id == punterId).Sum(tree =>
-                    tree.Contains(mine) ? tree.Sum(site => GetSquaredMineDistance(map.sites, mine, site)) : 0));
+                    tree.Contains(mine) ? tree.Sum(site => Utils.GetSquaredMineDistance(map.sites, mine, site)) : 0));
         }
 
-        public int ComputeLiberty(
-            Map map,
-            IEnumerable<River> rivers,
-            Func<int, bool> pred)
-        {
-            var trees = GetTrees(pred);
-
-            // Count only trees that connect to a mine. If no tree contects to a mine,
-            // treat the mine as a single-element tree.
-            var liveTrees = map.mines.Select(mine =>
-            {
-                var tree = trees.FirstOrDefault(i => i.Contains(mine));
-                return tree != null ? tree : new HashSet<int>() { mine };
-            });
-
-            return liveTrees.Sum(tree =>
-            {
-                var search = Utils.BreadthFirstSearch(tree, rivers).ToList();
-
-                var disconnectedSites = map.sites.Count - search.Count - tree.Count;
-
-                return search.Sum(i => i.Item1) + disconnectedSites * map.sites.Count;
-            });
-        }
-
-        List<HashSet<int>> GetTrees(Func<int, bool> pred)
+        public List<HashSet<int>> GetTrees(Func<int, bool> pred)
         {
             return this.trees
                 .Where(i => pred(i.Key))
                 .SelectMany(i => i.Value)
                 .ToList();
-        }
-
-        static int GetSquaredMineDistance(
-            List<Site> sites,
-            int mine,
-            int newSite)
-        {
-            var ans = sites
-                .First(site => site.id == newSite).mineDistances
-                .FirstOrDefault(mineDistance => mineDistance.mineId == mine);
-
-            var dist = ans == null ? 0 : ans.distance;
-
-            return dist * dist;
         }
     }
 
@@ -369,7 +330,7 @@ namespace Icfp2017
             }
         }
 
-        static Dictionary<int, HashSet<int>> BuildAdjacencyMap(
+        public static Dictionary<int, HashSet<int>> BuildAdjacencyMap(
             IEnumerable<River> rivers)
         {
             var ans = new Dictionary<int, HashSet<int>>();
@@ -391,6 +352,20 @@ namespace Icfp2017
             }
 
             return ans;
+        }
+
+        public static int GetSquaredMineDistance(
+            List<Site> sites,
+            int mine,
+            int newSite)
+        {
+            var ans = sites
+                .First(site => site.id == newSite).mineDistances
+                .FirstOrDefault(mineDistance => mineDistance.mineId == mine);
+
+            var dist = ans == null ? 0 : ans.distance;
+
+            return dist * dist;
         }
     }
 }

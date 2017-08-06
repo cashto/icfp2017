@@ -19,14 +19,15 @@ namespace Icfp2017
         static void Main(string[] args)
         {
             Parser parser;
+            string debug = null;
 
-            var debug = false;
-            Strategy strategy = LightningStrategy;
+            //debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug1";
+            Strategy strategy = V4Strategy;
 
-            if (debug)
+            if (debug != null)
             {
                 parser = new Parser(
-                    new StreamReader(@"C:\Users\cashto\Documents\GitHub\icfp2017\Server\bin\Debug\debug60"),
+                    new StreamReader(debug),
                     Console.Out);
             }
             else
@@ -46,7 +47,7 @@ namespace Icfp2017
                 {
                     ready = message.punter.Value,
                     state = JObject.FromObject(
-                        new SolverState() { initialState = message }, 
+                        new SolverState() { initialState = message },
                         new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore })
                 });
             }
@@ -129,57 +130,113 @@ namespace Icfp2017
                 .Select(riverScore => riverScore.river)
                 .First();
         }
-        
-        static River LightningStrategy(
+
+        static River V4Strategy(
             MoveMessage message,
             ServerMessage initialState,
             List<River> availableRivers)
         {
-            var earlyGame = (message.moves.Count - 2) * 10 < initialState.map.rivers.Count;
-            if (!earlyGame)
+            var myId = initialState.punter.Value;
+
+            // if it's early game, play a choke
+
+            // play a move that brings two big trees together
+            var treeSet = new TreeSet(message.moves);
+            var trees = treeSet.GetTrees(i => i == myId);
+            var adjMap = Utils.BuildAdjacencyMap(initialState.map.rivers);
+
+            // play a move that increases the number of neighbors or adds more points
+            return availableRivers
+                .Select(river => new
+                {
+                    river = river,
+                    neighbors = CountNewNeighbors(river, trees, adjMap),
+                    score = CountNewPoints(river, trees, initialState.map)
+                })
+                .OrderByDescending(i => i.neighbors)
+                .ThenByDescending(i => i.score)
+                .Select(i => i.river)
+                .First();
+
+            //var earlyGame = (message.moves.Count - 2) * 10 < initialState.map.rivers.Count;
+            //if (!earlyGame)
+            //{
+            //    return GreedyStrategy(message, initialState, availableRivers);
+            //}
+
+            //
+            //var map = initialState.map;
+            //var originalTreeSet = new TreeSet(message.moves);
+            //var originalScore = originalTreeSet.ComputeScore(myId, map);
+            //var originalLiberty =
+            //    originalTreeSet.ComputeLiberty(map, availableRivers, id => id != myId)
+            //    ; // -originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
+
+            //var analysis = availableRivers.Select(river =>
+            //    {
+            //        var newTreeSet = originalTreeSet.AddRiver(myId, river);
+            //        var newLiberty =
+            //            originalTreeSet.ComputeLiberty(map, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId)
+            //            ; // -newTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
+            //        return new
+            //        {
+            //            river = river,
+            //            scoreDelta = newTreeSet.ComputeScore(myId, map) - originalScore,
+            //            libertyDelta = (double)newLiberty / originalLiberty 
+            //        };
+            //    })
+            //.ToList();
+
+            //var bestForLiberty = analysis.OrderByDescending(i => i.libertyDelta).First();
+            //if (bestForLiberty.libertyDelta > 1.1)
+            //{
+            //    return bestForLiberty.river;
+            //}
+
+            //var bestForScore = analysis.OrderByDescending(i => i.scoreDelta).ThenByDescending(i => i.libertyDelta).First();
+            //return bestForScore.river;
+        }
+
+        static int CountNewNeighbors(
+            River river,
+            List<HashSet<int>> trees,
+            Dictionary<int, HashSet<int>> adjMap)
+        {
+            bool sourceInTree = trees.Any(i => i.Contains(river.source));
+            bool targetInTree = trees.Any(i => i.Contains(river.target));
+
+            if (sourceInTree && targetInTree || !sourceInTree && !targetInTree)
             {
-                return GreedyStrategy(message, initialState, availableRivers);
+                return 0;
             }
 
-            var myId = initialState.punter.Value;
-            var map = initialState.map;
-            var originalTreeSet = new TreeSet(message.moves);
-            // var originalScore = originalTreeSet.ComputeScore(myId, map);
-            var originalLiberty =
-                originalTreeSet.ComputeLiberty(map, availableRivers, id => id != myId)
-                ; // -originalTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
+            var newSite = sourceInTree ? river.target : river.source;
 
-            var analysis = availableRivers.Select(river =>
-                {
-                    var newTreeSet = originalTreeSet.AddRiver(myId, river);
-                    var newLiberty =
-                        originalTreeSet.ComputeLiberty(map, availableRivers.Where(i => i.source != river.source || i.target != river.target), id => id != myId)
-                        ; // -newTreeSet.ComputeLiberty(map.mines, availableRivers, id => id == myId);
-                    return new
-                    {
-                        river = river,
-                        // scoreDelta = newTreeSet.ComputeScore(myId, map) - originalScore,
-                        libertyDelta = newLiberty - originalLiberty
-                    };
-                })
-            .ToList();
+            return adjMap[newSite].Count(site => !trees.Any(tree => tree.Contains(site)));
+        }
 
-            // Future: make this less than O(n^2) (probably doesn't matter because code that generates
-            // analysis is O(n^2)
-            var rankedAnalysis = analysis
-                .Select(i => new
-                {
-                    river = i.river,
-                    score =
-                        // analysis.Count(j => i.scoreDelta >= j.scoreDelta) +
-                        analysis.Count(j => i.libertyDelta >= j.libertyDelta),
-                    // scoreDelta = i.scoreDelta,
-                    libertyDelta = i.libertyDelta
-                })
-                .OrderByDescending(i => i.score)
-                .ToList();
+        static int CountNewPoints(
+            River river,
+            List<HashSet<int>> trees,
+            Map map)
+        {
+            bool sourceInTree = trees.Any(i => i.Contains(river.source));
+            bool targetInTree = trees.Any(i => i.Contains(river.target));
 
-            return rankedAnalysis.First().river;
+            if (sourceInTree && targetInTree || !sourceInTree && !targetInTree)
+            {
+                return 0;
+            }
+
+            var oldSite = sourceInTree ? river.source : river.target;
+            var newSite = sourceInTree ? river.target : river.source;
+            var whichTree = trees.First(tree => tree.Contains(oldSite));
+
+            return map.mines
+                .Where(mine => whichTree.Contains(mine))
+                .Select(mine => Utils.GetSquaredMineDistance(map.sites, mine, newSite))
+                .DefaultIfEmpty(0)
+                .Sum();
         }
     }
 }

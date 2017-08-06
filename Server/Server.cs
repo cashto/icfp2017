@@ -108,10 +108,10 @@ namespace Icfp2017
         {
             //Console.Error.WriteLine($"+RunAi({moveNumber}, {ai}, ServerMessage)");
 
-            //using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
-            //{
-            //    new Parser(null, dbgWriter).Write(input);
-            //}
+            using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
+            {
+                new Parser(null, dbgWriter).Write(input);
+            }
 
             var process = new Process()
             {
