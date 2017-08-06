@@ -21,7 +21,7 @@ namespace Icfp2017
             Parser parser;
             string debug = null;
 
-            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug45";
+            //debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug85";
 
             if (debug != null)
             {
@@ -107,7 +107,7 @@ namespace Icfp2017
                     .Select(i => new River { source = i.claim.source, target = i.claim.target })
                     .ToList();
 
-                var chokes = FindChokes(initialMap, myRivers, availableRivers);
+                var chokes = FindChokes(initialMap.mines, myRivers, availableRivers);
 
                 if (chokes.Any())
                 {
@@ -118,42 +118,43 @@ namespace Icfp2017
             // otherwise play a move that brings two close big trees closer together (TODO)
             var trees = new TreeSet(message.moves, initialMap.mines, (claim) => claim.punter == myId);
 
-            // otherwise just play a move that increases liberty or score
-            var rankedRivers = availableRivers
+            // otherwise just play a move that joins two trees, increases liberty, or increases score
+            var riversToConsider = availableRivers
                 .Where(river => trees.Contains(river.source) || trees.Contains(river.target))
-                .DefaultIfEmpty(availableRivers.First())
-                .Select(river => new
-                {
-                    river = river,
-                    liberty = trees.AddRiver(river).ComputeLiberty(availableRivers),
-                    score = trees.AddRiver(river).ComputeScore(initialMap)
-                })
-                .OrderByDescending(i => i.liberty)
-                .ThenByDescending(i => i.score);
+                .DefaultIfEmpty(availableRivers.First());
 
-            return rankedRivers
-                .Select(i => i.river)
-                .First();
+            var rankedRivers =
+                from river in riversToConsider
+                let newTrees = trees.AddRiver(river)
+                let treeCount = newTrees.Trees.Count
+                let liberty = newTrees.ComputeLiberty(availableRivers)
+                let score = newTrees.ComputeScore(initialMap)
+                orderby treeCount, liberty descending, score descending
+                select new { river = river, liberty = liberty, score = score, treeCount = treeCount };
+
+            return rankedRivers.First().river;
         }
 
         static List<List<River>> FindChokes(
-            Map map,
+            List<int> mines,
             List<River> myRivers,
             List<River> availableRivers)
         {
-            var minePairs =
-                from mine1 in map.mines
-                from mine2 in map.mines
-                where mine1 < mine2
-                select Tuple.Create(mine1, mine2);
+            var trees = new TreeSet(myRivers, mines);
 
-            var shortestPaths = minePairs
-                .Select(minePair => new
+            var treePairs =
+                from tree1 in trees.Trees
+                from tree2 in trees.Trees
+                where tree1.First() < tree2.First()
+                select Tuple.Create(tree1, tree2);
+
+            var shortestPaths = treePairs
+                .Select(treePair => new
                 {
-                    minePair = minePair,
+                    treePair = treePair,
                     shortestPath = Utils.FindShortestPath(
-                        new HashSet<int>() { minePair.Item1 },
-                        new HashSet<int>() { minePair.Item2 },
+                        treePair.Item1,
+                        treePair.Item2,
                         availableRivers.Concat(myRivers))
                 })
                 .Where(i => i.shortestPath != null)
@@ -165,8 +166,8 @@ namespace Icfp2017
                 .Select(i => FindBestChoke(
                     myRivers,
                     availableRivers,
-                    new HashSet<int>() { i.minePair.Item1 },
-                    new HashSet<int>() { i.minePair.Item2 },
+                    i.treePair.Item1,
+                    i.treePair.Item2,
                     i.shortestPath))
                 .Where(i => i.Item2 > 1.3)
                 .GroupBy(i => i.Item1)

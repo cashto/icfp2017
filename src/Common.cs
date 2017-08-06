@@ -192,33 +192,41 @@ namespace Icfp2017
     {
         //static readonly List<HashSet<int>> EmptyTreeList = new List<HashSet<int>>();
 
-        List<HashSet<int>> trees;
+        public List<HashSet<int>> Trees { get; private set; }
 
         TreeSet(TreeSet other)
         {
-            trees = other.trees.Select(i => new HashSet<int>(i)).ToList();
+            Trees = other.Trees.Select(i => new HashSet<int>(i)).ToList();
         }
 
         public TreeSet(
             IEnumerable<Move> moves,
             IEnumerable<int> mines = null,
-            Func<ClaimMove, bool> moveFilter = null)
+            Func<ClaimMove, bool> moveFilter = null) 
+        : this(
+              moves
+                  .Select(move => move.claim)
+                  .Where(claim => claim != null)
+                  .Where(claim => moveFilter == null ? true : moveFilter(claim))
+                  .Select(claim => new River() { source = claim.source, target = claim.target }),
+              mines)
         {
-            trees = new List<HashSet<int>>();
+        }
+
+        public TreeSet(
+            IEnumerable<River> rivers,
+            IEnumerable<int> mines = null)
+        {
+            Trees = new List<HashSet<int>>();
 
             if (mines != null)
             {
-                trees.AddRange(mines.Select(mine => new HashSet<int>() { mine }));
+                Trees.AddRange(mines.Select(mine => new HashSet<int>() { mine }));
             }
 
-            var claims = moves
-                .Select(move => move.claim)
-                .Where(claim => claim != null)
-                .Where(claim => moveFilter == null ? true : moveFilter(claim));
-
-            foreach (var claim in claims)
+            foreach (var river in rivers)
             {
-                AddRiverImpl(claim.source, claim.target);
+                AddRiverImpl(river.source, river.target);
             }
         }
 
@@ -233,14 +241,14 @@ namespace Icfp2017
             int source,
             int target)
         {
-            var matchingTrees = this.trees
+            var matchingTrees = this.Trees
                 .Where(tree => tree.Contains(source) || tree.Contains(target))
                 .ToList();
 
             switch (matchingTrees.Count)
             {
                 case 0:
-                    this.trees.Add(new HashSet<int>() { source, target });
+                    this.Trees.Add(new HashSet<int>() { source, target });
                     break;
                 case 1:
                     matchingTrees.First().Add(source);
@@ -248,7 +256,7 @@ namespace Icfp2017
                     break;
                 case 2:
                     matchingTrees.First().UnionWith(matchingTrees.Last());
-                    this.trees.Remove(matchingTrees.Last());
+                    this.Trees.Remove(matchingTrees.Last());
                     break;
                 default:
                     throw new Exception("wtf?");
@@ -258,21 +266,23 @@ namespace Icfp2017
         public int ComputeScore(Map map)
         {
             return map.mines.Sum(mine =>
-                this.trees.Sum(tree =>
+                this.Trees.Sum(tree =>
                     tree.Contains(mine) ? tree.Sum(site => Utils.GetSquaredMineDistance(map.sites, mine, site)) : 0));
         }
 
         public int ComputeLiberty(IEnumerable<River> rivers)
         {
-            return this.trees
-                .SelectMany(tree => Utils.BreadthFirstSearch(tree, rivers, 2))
+            var myPoints = this.Trees.Sum(tree => tree.Count);
+
+            return myPoints + this.Trees
+                .SelectMany(tree => Utils.BreadthFirstSearch(tree, rivers, 2).Select(bfs => bfs.site))
                 .Distinct()
                 .Count();
         }
 
         public bool Contains(int site)
         {
-            return trees.Any(tree => tree.Contains(site));
+            return Trees.Any(tree => tree.Contains(site));
         }
     }
 
