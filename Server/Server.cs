@@ -110,7 +110,7 @@ namespace Icfp2017
 
             using (var dbgWriter = new StreamWriter($"debug{moveNumber}"))
             {
-                new Parser(null, dbgWriter).Write(input);
+                new Parser(null, dbgWriter).Write(input, Formatting.Indented);
             }
 
             var process = new Process()

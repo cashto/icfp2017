@@ -12,7 +12,6 @@ namespace Icfp2017
     class SolverState
     {
         public ServerMessage initialState;
-        public List<List<River>> chokes;
     }
 
     class Program
@@ -22,8 +21,7 @@ namespace Icfp2017
             Parser parser;
             string debug = null;
 
-            //debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug1";
-            Strategy strategy = V4Strategy;
+            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug5";
 
             if (debug != null)
             {
@@ -39,7 +37,7 @@ namespace Icfp2017
             }
 
             var message = parser.Read<ServerMessage>();
-
+ 
             if (message.punter != null)
             {
                 Utils.ComputeMineDistances(message.map);
@@ -48,13 +46,13 @@ namespace Icfp2017
                 {
                     ready = message.punter.Value,
                     state = JObject.FromObject(
-                        new SolverState() { initialState = message, chokes = FindChokes(message.map) },
+                        new SolverState() { initialState = message },
                         new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore })
                 });
             }
             else if (message.move != null)
             {
-                parser.Write(ComputeMove(message, strategy));
+                parser.Write(ComputeMove(message, V4Strategy));
             }
         }
 
@@ -71,21 +69,9 @@ namespace Icfp2017
 
             var myId = state.initialState.punter.Value;
 
-            var rivers = state.initialState.map.rivers;
-
-            var takenRivers = message.move.moves
-                .Where(move => move.claim != null)
-                .ToDictionary(
-                    move => new River()
-                    {
-                        source = move.claim.source,
-                        target = move.claim.target
-                    },
-                    move => true);
-
-            var availableRivers = rivers
-                .Where(river => !takenRivers.ContainsKey(river))
-                .ToList();
+            var availableRivers = Utils.RemoveRivers(
+                state.initialState.map.rivers,
+                message.move.moves.Where(move => move.claim != null));
 
             var ans = strategy(message.move, state, availableRivers);
 
@@ -107,30 +93,41 @@ namespace Icfp2017
             List<River> availableRivers)
         {
             var myId = solverState.initialState.punter.Value;
+            var initialMap = solverState.initialState.map;
 
-            // if there is a choke that hasn't been taken yet, grab it
-            var choke = solverState.chokes
-                .FirstOrDefault(i => i.Count == 1 && availableRivers.Contains(i[0]));
-            if (choke != null)
+            // if we see a choke, take it
+            var myRivers = message.moves
+                .Where(i => i.claim != null && i.claim.punter == myId)
+                .Select(i => new River { source = i.claim.source, target = i.claim.target })
+                .ToList();
+
+            var chokes = FindChokes(initialMap, myRivers, availableRivers);
+
+            if (chokes.Any())
             {
-                return choke[0];
+                return chokes[0][0];
             }
 
             // otherwise play a move that brings two close big trees closer together (TODO)
-            var treeSet = new TreeSet(message.moves);
-            var trees = treeSet.GetTrees(i => i == myId);
-            var adjMap = Utils.BuildAdjacencyMap(solverState.initialState.map.rivers);
+            var adjMap = Utils.BuildAdjacencyMap(availableRivers);
+
+            var trees = (new TreeSet(message.moves)).GetTrees(i => i == myId);
+            trees.AddRange(initialMap.mines
+                .Where(mine => !trees.Any(tree => tree.Contains(mine)))
+                .Select(mine => new HashSet<int>() { mine }));
 
             // otherwise just play a move that increases the number of neighbors or adds more points
-            return availableRivers
+            var rankedRivers = availableRivers
                 .Select(river => new
                 {
                     river = river,
                     neighbors = CountNewNeighbors(river, trees, adjMap),
-                    score = CountNewPoints(river, trees, solverState.initialState.map)
+                    score = CountNewPoints(river, trees, initialMap)
                 })
                 .OrderByDescending(i => i.neighbors)
-                .ThenByDescending(i => i.score)
+                .ThenByDescending(i => i.score);
+
+            return rankedRivers
                 .Select(i => i.river)
                 .First();
         }
@@ -149,6 +146,11 @@ namespace Icfp2017
             }
 
             var newSite = sourceInTree ? river.target : river.source;
+
+            if (!adjMap.ContainsKey(newSite))
+            {
+                return 0;
+            }
 
             return adjMap[newSite].Count(site => !trees.Any(tree => tree.Contains(site)));
         }
@@ -177,7 +179,10 @@ namespace Icfp2017
                 .Sum();
         }
 
-        static List<List<River>> FindChokes(Map map)
+        static List<List<River>> FindChokes(
+            Map map,
+            List<River> myRivers,
+            List<River> availableRivers)
         {
             var minePairs =
                 from mine1 in map.mines
@@ -192,17 +197,17 @@ namespace Icfp2017
                     shortestPath = Utils.FindShortestPath(
                         new HashSet<int>() { minePair.Item1 },
                         new HashSet<int>() { minePair.Item2 },
-                        map.rivers)
+                        availableRivers.Concat(myRivers))
                 })
                 .Where(i => i.shortestPath != null)
-                .Where(i => i.shortestPath.Count > 1)
                 .OrderBy(i => i.shortestPath.Count)
-                .Take(map.mines.Count)
+                // .Take(map.mines.Count)
                 .ToList();
 
             var bestChokes = shortestPaths
                 .Select(i => FindBestChoke(
-                    map, 
+                    myRivers,
+                    availableRivers,
                     new HashSet<int>() { i.minePair.Item1 },
                     new HashSet<int>() { i.minePair.Item2 },
                     i.shortestPath))
@@ -217,11 +222,14 @@ namespace Icfp2017
         }
 
         static Tuple<River, double> FindBestChoke(
-            Map map,
+            List<River> myRivers,
+            List<River> availableRivers,
             HashSet<int> sourceMine,
             HashSet<int> targetMine,
             List<int> shortestPath)
         {
+            var allRivers = myRivers.Concat(availableRivers);
+
             Func<List<int>, int> lengthOrDefault = (list) => list == null ? 10000 : list.Count;
 
             var rivers = shortestPath.Zip(
@@ -229,17 +237,18 @@ namespace Icfp2017
                 (source, target) =>
                 {
                     var river = new River() { source = source, target = target };
-                    return map.rivers.Contains(river) ? river : new River() { source = target, target = source };
+                    return allRivers.Contains(river) ? river : new River() { source = target, target = source };
                 });
 
-            var bestRiver = rivers
+            var bestRivers = availableRivers
                 .Select(river => new
                 {
                     river = river,
-                    shortestPath = lengthOrDefault(Utils.FindShortestPath(sourceMine, targetMine, map.rivers.Where(i => !i.Equals(river))))
+                    shortestPath = lengthOrDefault(Utils.FindShortestPath(sourceMine, targetMine, allRivers.Where(i => !i.Equals(river))))
                 })
-                .OrderBy(i => shortestPath)
-                .First();
+                .OrderByDescending(i => i.shortestPath);
+
+            var bestRiver = bestRivers.First();
 
             return Tuple.Create(bestRiver.river, (double)bestRiver.shortestPath / shortestPath.Count);
         }

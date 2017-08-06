@@ -70,20 +70,27 @@
             ctx.stroke();
         }
         
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+
         for (var i = 0; i < map.sites.length; ++i) {
             var site = map.sites[i];
             var pt = MapXy(site.x, site.y);
-            ctx.fillStyle = "#cccccc";
-            ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
+            ctx.strokeStyle = "#cccccc";
+            ctx.strokeText(site.id, pt.x - 4, pt.y + 2);
+            //ctx.fillStyle = "#cccccc";
+            //ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
         }
         
         for (var i = 0; i < map.mines.length; ++i) {
             var site = map.sites.filter(function(site) { return site.id == map.mines[i]; })[0];
             var pt = MapXy(site.x, site.y);
-            ctx.fillStyle = "#ff6666";
-            ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8);
-            ctx.lineWidth = 1;
-            //ctx.strokeStyle = "#666600";
+            //ctx.fillStyle = "#000000";
+            //ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8);
+            //ctx.lineWidth = 1;
+            
+            ctx.strokeStyle = "#ff6666";
+            ctx.strokeText(map.mines[i], pt.x - 4, pt.y + 2);
             //ctx.strokeRect(pt.x - 4, pt.y - 4, 8, 8);
         }
     }

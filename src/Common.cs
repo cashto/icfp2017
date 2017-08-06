@@ -146,9 +146,9 @@ namespace Icfp2017
             return JsonConvert.DeserializeObject<T>(commands.Current, DeserializerSettings);
         }
 
-        public void Write<T>(T obj)
+        public void Write<T>(T obj, Formatting formatting = Formatting.None)
         {
-            var s = JsonConvert.SerializeObject(obj, Formatting.None, SerializerSettings);
+            var s = JsonConvert.SerializeObject(obj, formatting, SerializerSettings);
             writer.Write(s.Length);
             writer.Write(':');
             writer.Write(s);
@@ -412,6 +412,24 @@ namespace Icfp2017
             }
 
             return null;
+        }
+
+        public static List<River> RemoveRivers(
+            IEnumerable<River> rivers,
+            IEnumerable<Move> riversToRemove)
+        {
+            var takenRivers = riversToRemove
+                .ToDictionary(
+                    move => new River()
+                    {
+                        source = move.claim.source,
+                        target = move.claim.target
+                    },
+                    move => true);
+
+            return rivers
+                .Where(river => !takenRivers.ContainsKey(river))
+                .ToList();
         }
     }
 }
