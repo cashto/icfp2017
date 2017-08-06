@@ -289,17 +289,24 @@ namespace Icfp2017
             {
                 foreach (var i in BreadthFirstSearch(new HashSet<int>() { mine }, map.rivers))
                 {
-                    sites[i.Item1].mineDistances.Add(
+                    sites[i.site].mineDistances.Add(
                         new MineDistance()
                         {
                             mineId = mine,
-                            distance = i.Item2
+                            distance = i.distance
                         });
                 }
             }
         }
 
-        public static IEnumerable<Tuple<int, int>> BreadthFirstSearch(
+        public struct BfsResult
+        {
+            public int site;
+            public int previousSite;
+            public int distance;
+        };
+
+        public static IEnumerable<BfsResult> BreadthFirstSearch(
             HashSet<int> startingSites,
             IEnumerable<River> rivers)
         {
@@ -323,7 +330,12 @@ namespace Icfp2017
                         {
                             distances[neighbor] = distance + 1;
                             queue.Enqueue(neighbor);
-                            yield return Tuple.Create(neighbor, distance + 1);
+                            yield return new BfsResult()
+                            {
+                                site = neighbor,
+                                previousSite = item,
+                                distance = distance + 1
+                            };
                         }
                     }
                 }
@@ -366,6 +378,40 @@ namespace Icfp2017
             var dist = ans == null ? 0 : ans.distance;
 
             return dist * dist;
+        }
+
+        public static List<int> FindShortestPath(
+            HashSet<int> source,
+            HashSet<int> target,
+            IEnumerable<River> rivers)
+        {
+            var previousSites = new Dictionary<int, int>();
+
+            foreach (var result in BreadthFirstSearch(source, rivers))
+            {
+                previousSites[result.site] = result.previousSite;
+
+                if (target.Contains(result.site))
+                {
+                    var ans = new List<int>();
+                    var site = result.site;
+
+                    while (true)
+                    {
+                        ans.Add(site);
+
+                        int newSite;
+                        if (!previousSites.TryGetValue(site, out newSite))
+                        {
+                            return ans;
+                        }
+
+                        site = newSite;
+                    }
+                }
+            }
+
+            return null;
         }
     }
 }
