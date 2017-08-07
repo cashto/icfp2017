@@ -21,7 +21,7 @@ namespace Icfp2017
             Parser parser;
             string debug = null;
 
-            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug130";
+            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug65";
 
             if (debug != null)
             {
@@ -112,7 +112,7 @@ namespace Icfp2017
                 solverState.initialState.settings.options &&
                 message.moves.Count(move => move.option != null && move.option.punter == myId) < initialMap.mines.Count;
 
-            var adjacencyMap = Utils.BuildAdjacencyMap(initialMap.rivers);
+            var adjacencyMap = new AdjacencyMap(initialMap.rivers);
 
             var mineDistances = new MineDistances(initialMap, adjacencyMap);
 
@@ -121,7 +121,7 @@ namespace Icfp2017
             // if we see a choke, take it
             var chokeFindTask = Task.Run(() =>
             {
-                return null;
+                // return null;
 
                 var punters = 
                     new List<int>() { myId }.Concat(
@@ -144,8 +144,7 @@ namespace Icfp2017
                     var chokes = FindChokes(
                         initialMap.mines,
                         Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(),
-                        availableRivers.Concat(availableOptions).ToList(),
-                        adjacencyMap);
+                        availableRivers.Concat(availableOptions).ToList());
 
                     if (chokes.Any())
                     {
@@ -195,11 +194,14 @@ namespace Icfp2017
 
             var doneTime = DateTime.UtcNow;
 
-            Log(myId, string.Format("[Normal] [{0}] [{1}/{2}/{3}]",
+            Log(myId, string.Format("[Normal] [{0}] [{1}/{2}/{3}] [Trees:{4}] [Liberties:{5}] [Score:{6}]",
                 (int)(doneTime - startTime).TotalMilliseconds,
                 (int)(setupDoneTime - startTime).TotalMilliseconds,
                 (int)(analysisDoneTime - setupDoneTime).TotalMilliseconds,
-                (int)(doneTime - analysisDoneTime).TotalMilliseconds));
+                (int)(doneTime - analysisDoneTime).TotalMilliseconds,
+                rankedRivers.First().treeCount,
+                rankedRivers.First().liberty,
+                rankedRivers.First().score));
 
             return ans;
         }
@@ -207,8 +209,7 @@ namespace Icfp2017
         static List<List<River>> FindChokes(
             List<int> mines,
             List<River> myRivers,
-            List<River> availableRivers,
-            Dictionary<int, HashSet<int>> adjacencyMap)
+            List<River> availableRivers)
         {
             var trees = new TreeSet(myRivers, mines);
 
@@ -218,6 +219,10 @@ namespace Icfp2017
                 where tree1.First() < tree2.First()
                 select Tuple.Create(tree1, tree2);
 
+            var allRivers = availableRivers.Concat(myRivers);
+
+            var allRiversAdjacencyMap = new AdjacencyMap(allRivers);
+
             var shortestPaths = treePairs
                 .Select(treePair => new
                 {
@@ -225,8 +230,8 @@ namespace Icfp2017
                     shortestPath = Utils.FindShortestPath(
                         treePair.Item1,
                         treePair.Item2,
-                        availableRivers.Concat(myRivers),
-                        adjacencyMap)
+                        allRivers,
+                        allRiversAdjacencyMap)
                 })
                 .Where(i => i.shortestPath != null)
                 .OrderBy(i => i.shortestPath.Count)
@@ -235,12 +240,12 @@ namespace Icfp2017
 
             var bestChokes = shortestPaths
                 .Select(i => FindBestChoke(
-                    myRivers,
+                    allRivers,
+                    allRiversAdjacencyMap,
                     availableRivers,
                     i.treePair.Item1,
                     i.treePair.Item2,
-                    i.shortestPath,
-                    adjacencyMap))
+                    i.shortestPath))
                 .Where(i => i.Item2 > 1.3)
                 .GroupBy(i => i.Item1)
                 .OrderByDescending(group => group.Sum(i => i.Item2))
@@ -252,15 +257,13 @@ namespace Icfp2017
         }
 
         static Tuple<River, double> FindBestChoke(
-            List<River> myRivers,
+            IEnumerable<River> allRivers,
+            AdjacencyMap allRiversAdjacencyMap,
             List<River> availableRivers,
             HashSet<int> sourceMine,
             HashSet<int> targetMine,
-            List<int> shortestPath,
-            Dictionary<int, HashSet<int>> adjacencyMap)
+            List<int> shortestPath)
         {
-            var allRivers = myRivers.Concat(availableRivers);
-
             Func<List<int>, int> lengthOrDefault = (list) => list == null ? 10000 : list.Count;
 
             var rivers = shortestPath.Zip(
@@ -272,15 +275,24 @@ namespace Icfp2017
                 });
 
             var bestRivers = availableRivers
-                .Select(river => new
+                .Select(river =>
                 {
-                    river = river,
-                    shortestPath = lengthOrDefault(
-                        Utils.FindShortestPath(
-                            sourceMine, 
-                            targetMine, 
-                            allRivers.Where(i => !i.Equals(river)),
-                            adjacencyMap))
+                    allRiversAdjacencyMap.Remove(river);
+
+                    var ans = new
+                    {
+                        river = river,
+                        shortestPath = lengthOrDefault(
+                            Utils.FindShortestPath(
+                                sourceMine,
+                                targetMine,
+                                allRivers.Where(i => !i.Equals(river)),
+                                allRiversAdjacencyMap))
+                    };
+
+                    allRiversAdjacencyMap.Add(river);
+
+                    return ans;
                 })
                 .OrderByDescending(i => i.shortestPath);
 

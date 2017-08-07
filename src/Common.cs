@@ -263,12 +263,12 @@ namespace Icfp2017
                     tree.Contains(mine) ? tree.Sum(site => distances.GetSquaredDistance(mine, site)) : 0));
         }
 
-        public int ComputeLiberty(IEnumerable<River> rivers, Dictionary<int, HashSet<int>> adjacencyMap)
+        public int ComputeLiberty(IEnumerable<River> rivers, AdjacencyMap adjacencyMap)
         {
             var myPoints = this.Trees.Sum(tree => tree.Count);
 
             return myPoints + this.Trees
-                .SelectMany(tree => Utils.BreadthFirstSearch(tree, rivers, 2, adjacencyMap: adjacencyMap).Select(bfs => bfs.site))
+                .SelectMany(tree => Utils.BreadthFirstSearch(tree, rivers, adjacencyMap, 2).Select(bfs => bfs.site))
                 .Distinct()
                 .Count();
         }
@@ -285,7 +285,7 @@ namespace Icfp2017
 
         public MineDistances(
             Map map,
-            Dictionary<int, HashSet<int>> adjacencyMap)
+            AdjacencyMap adjacencyMap)
         {
             foreach (int mine in map.mines)
             {
@@ -318,6 +318,48 @@ namespace Icfp2017
         }
     }
 
+    class AdjacencyMap
+    {
+        Dictionary<int, HashSet<int>> map = new Dictionary<int, HashSet<int>>();
+        static readonly HashSet<int> EmptyHashSet = new HashSet<int>();
+
+        public AdjacencyMap(IEnumerable<River> rivers)
+        {
+            foreach (var river in rivers)
+            {
+                Add(river);
+            }
+        }
+
+        public void Add(River river)
+        {
+            AddImpl(river.source, river.target);
+            AddImpl(river.target, river.source);
+        }
+
+        public void Remove(River river)
+        {
+            map[river.source].Remove(river.target);
+            map[river.target].Remove(river.source);
+        }
+
+        public HashSet<int> GetNeighbors(int site)
+        {
+            HashSet<int> ans;
+            return map.TryGetValue(site, out ans) ? ans : EmptyHashSet;
+        }
+
+        void AddImpl(int source, int target)
+        {
+            if (!map.ContainsKey(source))
+            {
+                map[source] = new HashSet<int>();
+            }
+
+            map[source].Add(target);
+        }
+    }
+
     static class Utils
     {
         public struct BfsResult
@@ -330,14 +372,9 @@ namespace Icfp2017
         public static IEnumerable<BfsResult> BreadthFirstSearch(
             HashSet<int> startingSites,
             IEnumerable<River> rivers,
-            int maxDepth = int.MaxValue,
-            Dictionary<int, HashSet<int>> adjacencyMap = null)
+            AdjacencyMap adjacencyMap,
+            int maxDepth = int.MaxValue)
         {
-            if (adjacencyMap == null)
-            {
-                adjacencyMap = BuildAdjacencyMap(rivers);
-            }
-
             var distances = startingSites.ToDictionary(i => i, i => 0);
 
             var queue = new Queue<int>(startingSites);
@@ -351,60 +388,32 @@ namespace Icfp2017
                     yield break; 
                 }
 
-                HashSet<int> neighbors;
-                if (adjacencyMap.TryGetValue(item, out neighbors))
+                foreach (var neighbor in adjacencyMap.GetNeighbors(item))
                 {
-                    foreach (var neighbor in neighbors)
+                    if (!distances.ContainsKey(neighbor))
                     {
-                        if (!distances.ContainsKey(neighbor))
+                        distances[neighbor] = distance + 1;
+                        queue.Enqueue(neighbor);
+                        yield return new BfsResult()
                         {
-                            distances[neighbor] = distance + 1;
-                            queue.Enqueue(neighbor);
-                            yield return new BfsResult()
-                            {
-                                site = neighbor,
-                                previousSite = item,
-                                distance = distance + 1
-                            };
-                        }
+                            site = neighbor,
+                            previousSite = item,
+                            distance = distance + 1
+                        };
                     }
                 }
             }
-        }
-
-        public static Dictionary<int, HashSet<int>> BuildAdjacencyMap(
-            IEnumerable<River> rivers)
-        {
-            var ans = new Dictionary<int, HashSet<int>>();
-
-            Action<int, int> add = (source, target) =>
-            {
-                if (!ans.ContainsKey(source))
-                {
-                    ans[source] = new HashSet<int>();
-                }
-
-                ans[source].Add(target);
-            };
-
-            foreach (var river in rivers)
-            {
-                add(river.source, river.target);
-                add(river.target, river.source);
-            }
-
-            return ans;
         }
 
         public static List<int> FindShortestPath(
             HashSet<int> source,
             HashSet<int> target,
             IEnumerable<River> rivers,
-            Dictionary<int, HashSet<int>> adjacencyMap)
+            AdjacencyMap adjacencyMap)
         {
             var previousSites = new Dictionary<int, int>();
 
-            foreach (var result in BreadthFirstSearch(source, rivers, adjacencyMap: adjacencyMap))
+            foreach (var result in BreadthFirstSearch(source, rivers, adjacencyMap))
             {
                 previousSites[result.site] = result.previousSite;
 

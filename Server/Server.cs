@@ -83,7 +83,7 @@ namespace Icfp2017
                 moves.Add(move);
             }
 
-            var mineDistances = new MineDistances(map, Utils.BuildAdjacencyMap(map.rivers));
+            var mineDistances = new MineDistances(map, new AdjacencyMap(map.rivers));
 
             var scores = Enumerable.Range(0, ais.Count)
                 .Select(idx => (new TreeSet(Utils.ConvertMovesToRivers(map, moves, (id) => id == idx))).ComputeScore(mineDistances))
