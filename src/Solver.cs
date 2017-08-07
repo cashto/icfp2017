@@ -154,6 +154,8 @@ namespace Icfp2017
         {
             var startTime = DateTime.UtcNow;
 
+            var deadLine = startTime.AddMilliseconds(900);
+
             var myId = solverState.initialState.punter.Value;
 
             var initialMap = solverState.initialState.map;
@@ -202,7 +204,7 @@ namespace Icfp2017
                         initialMap.mines,
                         Utils.ConvertMovesToRivers(initialMap, solverState.moves, (id) => id == punter).ToList(),
                         availableRivers.Concat(availableOptions).ToList(),
-                        startTime.AddMilliseconds(900));
+                        deadLine.AddMilliseconds(-100));
 
                     if (chokes.Any())
                     {
@@ -234,6 +236,7 @@ namespace Icfp2017
 
             var rankedRivers =
                 from river in riversToConsider
+                where DateTime.UtcNow < deadLine
                 let newTrees = trees.AddRiver(river)
                 let treeCount = newTrees.Trees.Count
                 let liberty = newTrees.ComputeLiberty(availableRivers, adjacencyMap)
@@ -245,7 +248,12 @@ namespace Icfp2017
 
             var analysisDoneTime = DateTime.UtcNow;
 
-            if (chokeFindTask.Result != null)
+            var zero = TimeSpan.FromTicks(0);
+            var waitTime = deadLine - DateTime.UtcNow;
+            waitTime = waitTime < zero ? zero : waitTime;
+            chokeFindTask.Wait(waitTime);
+
+            if (chokeFindTask.IsCompleted && chokeFindTask.Result != null)
             {
                 return chokeFindTask.Result;
             }
