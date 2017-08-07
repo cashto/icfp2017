@@ -21,7 +21,7 @@ namespace Icfp2017
             Parser parser;
             string debug = null;
 
-            //debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug85";
+            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug130";
 
             if (debug != null)
             {
@@ -49,8 +49,6 @@ namespace Icfp2017
             else if (message.punter != null)
             {
                 // Initial setup
-                Utils.ComputeMineDistances(message.map);
-
                 message.settings = message.settings ?? new Settings();
 
                 parser.Write(new SetupResponse()
@@ -97,6 +95,8 @@ namespace Icfp2017
             MoveMessage message,
             SolverState solverState)
         {
+            var startTime = DateTime.UtcNow;
+
             var myId = solverState.initialState.punter.Value;
 
             var initialMap = solverState.initialState.map;
@@ -112,36 +112,59 @@ namespace Icfp2017
                 solverState.initialState.settings.options &&
                 message.moves.Count(move => move.option != null && move.option.punter == myId) < initialMap.mines.Count;
 
+            var adjacencyMap = Utils.BuildAdjacencyMap(initialMap.rivers);
+
+            var mineDistances = new MineDistances(initialMap, adjacencyMap);
+
+            var setupDoneTime = DateTime.UtcNow;
+
             // if we see a choke, take it
-            var punters =
-                new List<int>() { myId }.Concat(
-                Enumerable.Range(0, solverState.initialState.punters.Value).Where(i => i != myId));
-
-            foreach (var punter in punters)
+            var chokeFindTask = Task.Run(() =>
             {
-                var availableOptions = new List<River>();
-                if (canUseOptions && punter == myId)
-                {
-                    var takenOptions = Utils.ConvertMovesToRivers(initialMap, message.moves.Where(move => move.option != null), (id) => true)
-                        .ToLookup(river => river, river => true);
+                return null;
 
-                    availableOptions =
-                        Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id != myId)
-                        .Where(river => !takenOptions.Contains(river))
-                        .ToList();
+                var punters = 
+                    new List<int>() { myId }.Concat(
+                    Enumerable.Range(0, solverState.initialState.punters.Value).Where(i => i != myId));
+
+                foreach (var punter in punters)
+                {
+                    var availableOptions = new List<River>();
+                    if (canUseOptions && punter == myId)
+                    {
+                        var takenOptions = Utils.ConvertMovesToRivers(initialMap, message.moves.Where(move => move.option != null), (id) => true)
+                            .ToLookup(river => river, river => true);
+
+                        availableOptions =
+                            Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id != myId)
+                            .Where(river => !takenOptions.Contains(river))
+                            .ToList();
+                    }
+
+                    var chokes = FindChokes(
+                        initialMap.mines,
+                        Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(),
+                        availableRivers.Concat(availableOptions).ToList(),
+                        adjacencyMap);
+
+                    if (chokes.Any())
+                    {
+                        var river = chokes[0][0];
+
+                        var chokeAnalysisDoneTime = DateTime.UtcNow;
+
+                        Log(myId, string.Format("[{0}] [{1}] [{2}/{3}]",
+                            punter == myId ? "TakeChoke" : "BlockChoke",
+                            (int)(chokeAnalysisDoneTime - startTime).TotalMilliseconds,
+                            (int)(setupDoneTime - startTime).TotalMilliseconds,
+                            (int)(chokeAnalysisDoneTime - setupDoneTime).TotalMilliseconds));
+
+                        return availableOptions.Contains(river) ? CreateOptionMove(myId, river) : CreateClaimMove(myId, river);
+                    }
                 }
 
-                var chokes = FindChokes(
-                    initialMap.mines,
-                    Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(), 
-                    availableRivers.Concat(availableOptions).ToList());
-
-                if (chokes.Any())
-                {
-                    var river = chokes[0][0];
-                    return availableOptions.Contains(river) ? CreateOptionMove(myId, river) : CreateClaimMove(myId, river);
-                }
-            }
+                return null;
+            });
 
             // otherwise just play a move that joins two trees, increases liberty, or increases score
             var trees = new TreeSet(
@@ -156,18 +179,36 @@ namespace Icfp2017
                 from river in riversToConsider
                 let newTrees = trees.AddRiver(river)
                 let treeCount = newTrees.Trees.Count
-                let liberty = newTrees.ComputeLiberty(availableRivers)
-                let score = newTrees.ComputeScore(initialMap)
+                let liberty = newTrees.ComputeLiberty(availableRivers, adjacencyMap)
+                let score = newTrees.ComputeScore(mineDistances)
                 orderby treeCount, liberty descending, score descending
                 select new { river = river, liberty = liberty, score = score, treeCount = treeCount };
 
-            return CreateClaimMove(myId, rankedRivers.First().river);
+            var ans = CreateClaimMove(myId, rankedRivers.First().river);
+
+            var analysisDoneTime = DateTime.UtcNow;
+
+            if (chokeFindTask.Result != null)
+            {
+                return chokeFindTask.Result;
+            }
+
+            var doneTime = DateTime.UtcNow;
+
+            Log(myId, string.Format("[Normal] [{0}] [{1}/{2}/{3}]",
+                (int)(doneTime - startTime).TotalMilliseconds,
+                (int)(setupDoneTime - startTime).TotalMilliseconds,
+                (int)(analysisDoneTime - setupDoneTime).TotalMilliseconds,
+                (int)(doneTime - analysisDoneTime).TotalMilliseconds));
+
+            return ans;
         }
 
         static List<List<River>> FindChokes(
             List<int> mines,
             List<River> myRivers,
-            List<River> availableRivers)
+            List<River> availableRivers,
+            Dictionary<int, HashSet<int>> adjacencyMap)
         {
             var trees = new TreeSet(myRivers, mines);
 
@@ -184,7 +225,8 @@ namespace Icfp2017
                     shortestPath = Utils.FindShortestPath(
                         treePair.Item1,
                         treePair.Item2,
-                        availableRivers.Concat(myRivers))
+                        availableRivers.Concat(myRivers),
+                        adjacencyMap)
                 })
                 .Where(i => i.shortestPath != null)
                 .OrderBy(i => i.shortestPath.Count)
@@ -197,7 +239,8 @@ namespace Icfp2017
                     availableRivers,
                     i.treePair.Item1,
                     i.treePair.Item2,
-                    i.shortestPath))
+                    i.shortestPath,
+                    adjacencyMap))
                 .Where(i => i.Item2 > 1.3)
                 .GroupBy(i => i.Item1)
                 .OrderByDescending(group => group.Sum(i => i.Item2))
@@ -213,7 +256,8 @@ namespace Icfp2017
             List<River> availableRivers,
             HashSet<int> sourceMine,
             HashSet<int> targetMine,
-            List<int> shortestPath)
+            List<int> shortestPath,
+            Dictionary<int, HashSet<int>> adjacencyMap)
         {
             var allRivers = myRivers.Concat(availableRivers);
 
@@ -231,13 +275,26 @@ namespace Icfp2017
                 .Select(river => new
                 {
                     river = river,
-                    shortestPath = lengthOrDefault(Utils.FindShortestPath(sourceMine, targetMine, allRivers.Where(i => !i.Equals(river))))
+                    shortestPath = lengthOrDefault(
+                        Utils.FindShortestPath(
+                            sourceMine, 
+                            targetMine, 
+                            allRivers.Where(i => !i.Equals(river)),
+                            adjacencyMap))
                 })
                 .OrderByDescending(i => i.shortestPath);
 
             var bestRiver = bestRivers.First();
 
             return Tuple.Create(bestRiver.river, (double)bestRiver.shortestPath / shortestPath.Count);
+        }
+
+        static void Log(int myId, string s)
+        {
+            using (var file = File.AppendText($"prototyp-{myId}.log"))
+            {
+                file.WriteLine(s);
+            }
         }
     }
 }

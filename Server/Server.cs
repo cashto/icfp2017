@@ -64,6 +64,7 @@ namespace Icfp2017
                     '*';
 
                 Console.Error.Write(ch);
+                Console.Error.Flush();
 
                 var move = RunAi<Move>(
                     moveNumber,
@@ -82,10 +83,10 @@ namespace Icfp2017
                 moves.Add(move);
             }
 
-            Utils.ComputeMineDistances(map);
+            var mineDistances = new MineDistances(map, Utils.BuildAdjacencyMap(map.rivers));
 
             var scores = Enumerable.Range(0, ais.Count)
-                .Select(idx => (new TreeSet(Utils.ConvertMovesToRivers(map, moves, (id) => id == idx))).ComputeScore(map))
+                .Select(idx => (new TreeSet(Utils.ConvertMovesToRivers(map, moves, (id) => id == idx))).ComputeScore(mineDistances))
                 .ToList();
 
             var output = new Output()

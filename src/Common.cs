@@ -41,18 +41,6 @@ namespace Icfp2017
     class Site
     {
         public int id;
-
-        [JsonProperty(PropertyName = "md")]
-        public List<MineDistance> mineDistances;
-    }
-
-    class MineDistance
-    {
-        [JsonProperty(PropertyName = "id")]
-        public int mineId;
-
-        [JsonProperty(PropertyName = "d")]
-        public int distance;
     }
 
     struct River
@@ -268,19 +256,19 @@ namespace Icfp2017
             }
         }
 
-        public int ComputeScore(Map map)
+        public int ComputeScore(MineDistances distances)
         {
-            return map.mines.Sum(mine =>
+            return distances.GetMines().Sum(mine =>
                 this.Trees.Sum(tree =>
-                    tree.Contains(mine) ? tree.Sum(site => Utils.GetSquaredMineDistance(map.sites, mine, site)) : 0));
+                    tree.Contains(mine) ? tree.Sum(site => distances.GetSquaredDistance(mine, site)) : 0));
         }
 
-        public int ComputeLiberty(IEnumerable<River> rivers)
+        public int ComputeLiberty(IEnumerable<River> rivers, Dictionary<int, HashSet<int>> adjacencyMap)
         {
             var myPoints = this.Trees.Sum(tree => tree.Count);
 
             return myPoints + this.Trees
-                .SelectMany(tree => Utils.BreadthFirstSearch(tree, rivers, 2).Select(bfs => bfs.site))
+                .SelectMany(tree => Utils.BreadthFirstSearch(tree, rivers, 2, adjacencyMap: adjacencyMap).Select(bfs => bfs.site))
                 .Distinct()
                 .Count();
         }
@@ -291,31 +279,47 @@ namespace Icfp2017
         }
     }
 
-    static class Utils
+    class MineDistances
     {
-        public static void ComputeMineDistances(Map map)
+        Dictionary<int, Dictionary<int, int>> distances = new Dictionary<int, Dictionary<int, int>>();
+
+        public MineDistances(
+            Map map,
+            Dictionary<int, HashSet<int>> adjacencyMap)
         {
-            var sites = map.sites.ToDictionary(i => i.id, i => i);
-
-            foreach (Site site in map.sites)
-            {
-                site.mineDistances = new List<MineDistance>();
-            }
-
             foreach (int mine in map.mines)
             {
-                foreach (var i in BreadthFirstSearch(new HashSet<int>() { mine }, map.rivers))
+                this.distances[mine] = new Dictionary<int, int>();
+
+                foreach (var i in Utils.BreadthFirstSearch(new HashSet<int>() { mine }, map.rivers, adjacencyMap: adjacencyMap))
                 {
-                    sites[i.site].mineDistances.Add(
-                        new MineDistance()
-                        {
-                            mineId = mine,
-                            distance = i.distance
-                        });
+                    this.distances[mine][i.site] = i.distance;
                 }
             }
         }
 
+        public int GetSquaredDistance(int mineId, int siteId)
+        {
+            var dict = this.distances[mineId];
+
+            if (!dict.ContainsKey(siteId))
+            {
+                return 0;
+            }
+
+            var dist = dict[siteId];
+
+            return dist * dist;
+        }
+
+        public IEnumerable<int> GetMines()
+        {
+            return this.distances.Keys;
+        }
+    }
+
+    static class Utils
+    {
         public struct BfsResult
         {
             public int site;
@@ -326,9 +330,13 @@ namespace Icfp2017
         public static IEnumerable<BfsResult> BreadthFirstSearch(
             HashSet<int> startingSites,
             IEnumerable<River> rivers,
-            int maxDepth = int.MaxValue)
+            int maxDepth = int.MaxValue,
+            Dictionary<int, HashSet<int>> adjacencyMap = null)
         {
-            var adjacencyMap = BuildAdjacencyMap(rivers);
+            if (adjacencyMap == null)
+            {
+                adjacencyMap = BuildAdjacencyMap(rivers);
+            }
 
             var distances = startingSites.ToDictionary(i => i, i => 0);
 
@@ -388,28 +396,15 @@ namespace Icfp2017
             return ans;
         }
 
-        public static int GetSquaredMineDistance(
-            List<Site> sites,
-            int mine,
-            int newSite)
-        {
-            var ans = sites
-                .First(site => site.id == newSite).mineDistances
-                .FirstOrDefault(mineDistance => mineDistance.mineId == mine);
-
-            var dist = ans == null ? 0 : ans.distance;
-
-            return dist * dist;
-        }
-
         public static List<int> FindShortestPath(
             HashSet<int> source,
             HashSet<int> target,
-            IEnumerable<River> rivers)
+            IEnumerable<River> rivers,
+            Dictionary<int, HashSet<int>> adjacencyMap)
         {
             var previousSites = new Dictionary<int, int>();
 
-            foreach (var result in BreadthFirstSearch(source, rivers))
+            foreach (var result in BreadthFirstSearch(source, rivers, adjacencyMap: adjacencyMap))
             {
                 previousSites[result.site] = result.previousSite;
 
