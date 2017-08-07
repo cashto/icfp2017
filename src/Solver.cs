@@ -21,7 +21,7 @@ namespace Icfp2017
         static void Main(string[] args)
         {
             string debug = null;
-            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug39";
+            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug0";
 
             Parser parser;
             var onlineMode = args.Length > 0;
@@ -87,7 +87,8 @@ namespace Icfp2017
                     }
                     catch (Exception e)
                     {
-                        Log(0, $"[{e.ToString()}]");
+                        Log(10000, $"[{e.ToString()}]");
+                        Console.Error.WriteLine(e.ToString());
                     }
                 }
                 else if (message.punter != null)
@@ -177,7 +178,7 @@ namespace Icfp2017
             var chokeFindTask = Task.Run(() =>
             {
                 var punters = new List<int>() { myId };
-                if (solverState.initialState.punter.Value == 2)
+                if (solverState.initialState.punters.Value == 2)
                 {
                     punters.Insert(0, 1 - myId);
                 }
@@ -230,15 +231,20 @@ namespace Icfp2017
                 .Where(river => trees.Contains(river.source) || trees.Contains(river.target))
                 .DefaultIfEmpty(availableRivers.First());
 
-            var rankedRivers =
+            var riversConsidered =
                 from river in riversToConsider
                 where DateTime.UtcNow < deadLine
                 let newTrees = trees.AddRiver(river)
                 let treeCount = newTrees.Trees.Count
                 let liberty = newTrees.ComputeLiberty(availableRivers, adjacencyMap)
                 let score = newTrees.ComputeScore(mineDistances)
-                orderby treeCount, liberty descending, score descending
                 select new { river = river, liberty = liberty, score = score, treeCount = treeCount };
+
+            var rankedRivers = riversConsidered
+                .ToList()
+                .OrderBy(i => i.treeCount)
+                .ThenByDescending(i => i.liberty)
+                .ThenByDescending(i => i.score);
 
             var ans = CreateClaimMove(myId, rankedRivers.First().river);
 
