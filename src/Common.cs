@@ -337,10 +337,10 @@ namespace Icfp2017
             AddImpl(river.target, river.source);
         }
 
-        public void Remove(River river)
+        public bool Remove(River river)
         {
             map[river.source].Remove(river.target);
-            map[river.target].Remove(river.source);
+            return map[river.target].Remove(river.source);
         }
 
         public HashSet<int> GetNeighbors(int site)

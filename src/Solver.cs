@@ -21,7 +21,7 @@ namespace Icfp2017
             Parser parser;
             string debug = null;
 
-            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug65";
+            // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug39";
 
             if (debug != null)
             {
@@ -121,13 +121,10 @@ namespace Icfp2017
             // if we see a choke, take it
             var chokeFindTask = Task.Run(() =>
             {
-                // return null;
+                var me = new List<int>() { myId };
+                var everyoneElse = Enumerable.Range(0, solverState.initialState.punters.Value).Where(i => i != myId);
 
-                var punters = 
-                    new List<int>() { myId }.Concat(
-                    Enumerable.Range(0, solverState.initialState.punters.Value).Where(i => i != myId));
-
-                foreach (var punter in punters)
+                foreach (var punter in everyoneElse.Concat(me))
                 {
                     var availableOptions = new List<River>();
                     if (canUseOptions && punter == myId)
@@ -144,7 +141,8 @@ namespace Icfp2017
                     var chokes = FindChokes(
                         initialMap.mines,
                         Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(),
-                        availableRivers.Concat(availableOptions).ToList());
+                        availableRivers.Concat(availableOptions).ToList(),
+                        startTime.AddMilliseconds(900));
 
                     if (chokes.Any())
                     {
@@ -153,7 +151,7 @@ namespace Icfp2017
                         var chokeAnalysisDoneTime = DateTime.UtcNow;
 
                         Log(myId, string.Format("[{0}] [{1}] [{2}/{3}]",
-                            punter == myId ? "TakeChoke" : "BlockChoke",
+                            punter == myId ? "TakeChoke " : "BlockChoke",
                             (int)(chokeAnalysisDoneTime - startTime).TotalMilliseconds,
                             (int)(setupDoneTime - startTime).TotalMilliseconds,
                             (int)(chokeAnalysisDoneTime - setupDoneTime).TotalMilliseconds));
@@ -194,7 +192,7 @@ namespace Icfp2017
 
             var doneTime = DateTime.UtcNow;
 
-            Log(myId, string.Format("[Normal] [{0}] [{1}/{2}/{3}] [Trees:{4}] [Liberties:{5}] [Score:{6}]",
+            Log(myId, string.Format("[NormalMove] [{0}] [{1}/{2}/{3}] [Trees:{4}] [Liberties:{5}] [Score:{6}]",
                 (int)(doneTime - startTime).TotalMilliseconds,
                 (int)(setupDoneTime - startTime).TotalMilliseconds,
                 (int)(analysisDoneTime - setupDoneTime).TotalMilliseconds,
@@ -209,7 +207,8 @@ namespace Icfp2017
         static List<List<River>> FindChokes(
             List<int> mines,
             List<River> myRivers,
-            List<River> availableRivers)
+            List<River> availableRivers,
+            DateTime deadLine)
         {
             var trees = new TreeSet(myRivers, mines);
 
@@ -239,14 +238,14 @@ namespace Icfp2017
                 .ToList();
 
             var bestChokes = shortestPaths
-                .Select(i => FindBestChoke(
+                .Select(i => DateTime.UtcNow > deadLine ? null : FindBestChoke(
                     allRivers,
                     allRiversAdjacencyMap,
                     availableRivers,
                     i.treePair.Item1,
                     i.treePair.Item2,
                     i.shortestPath))
-                .Where(i => i.Item2 > 1.3)
+                .Where(i => i != null && i.Item2 > 1.3)
                 .GroupBy(i => i.Item1)
                 .OrderByDescending(group => group.Sum(i => i.Item2))
                 .ToList();
@@ -277,7 +276,7 @@ namespace Icfp2017
             var bestRivers = availableRivers
                 .Select(river =>
                 {
-                    allRiversAdjacencyMap.Remove(river);
+                    bool removedItem = allRiversAdjacencyMap.Remove(river);
 
                     var ans = new
                     {
@@ -290,7 +289,10 @@ namespace Icfp2017
                                 allRiversAdjacencyMap))
                     };
 
-                    allRiversAdjacencyMap.Add(river);
+                    if (removedItem)
+                    {
+                        allRiversAdjacencyMap.Add(river);
+                    }
 
                     return ans;
                 })
