@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 
+<script src='data.js'></script>
+
 <script>
     var output;
     var map;
@@ -18,14 +20,13 @@
     }
 
     function OnLoad() {
-        var fso = new ActiveXObject('Scripting.FileSystemObject');
-        var file = fso.OpenTextFile('C:\\Users\\cashto\\Documents\\GitHub\\icfp2017\\work\\out.txt');
-        output = JSON.parse(file.ReadAll());
-        file.Close();
+        var ctlMap = document.getElementById("ctlMap");
+        var ctlMatch = document.getElementById("ctlMatch");
+        var ctlOption = document.getElementById("ctlOption");
+        var filename = ctlMap.value + "-" + ctlMatch.value + (ctlOption.checked ? "-options" : "-no_options") + ".json";
         
-        var file = fso.OpenTextFile('C:\\Users\\cashto\\Documents\\GitHub\\icfp2017\\work\\maps\\' + output.map + '.json');
-        map = JSON.parse(file.ReadAll());
-        file.Close();
+        output = data[filename];
+        map = data[output.map + '.json'];
         
         var xs = map.sites.map(function(i) { return i.x; });
         var ys = map.sites.map(function(i) { return i.y; });
@@ -35,12 +36,14 @@
         ymax = max(ys);
         ymin = min(ys);
         
-        cursor = 0;
+        cursor = output.verbose.moves.length;
         
         Render();        
     }
     
     function MapXy(x, y) {
+        var ctlCanvas = document.getElementById("ctlCanvas");
+        
         return {
             x: (x - xmin) / (xmax - xmin) * (ctlCanvas.width - 20) + 10.5,
             y: (y - ymin) / (ymax - ymin) * (ctlCanvas.height - 20) + 10.5
@@ -48,8 +51,16 @@
     }
     
     function Render() {
+        var ctlCanvas = document.getElementById("ctlCanvas");
+        var ctlMatch = document.getElementById("ctlMatch");
+        
+        var player1 = (ctlMatch.selectedIndex == 0) ? "Lightning" : "Standard";
+        var player2 = (ctlMatch.selectedIndex == 1) ? "Lightning" : "Standard";
+        
         spanCursor.innerHTML = cursor;
-        spanScore.innerHTML = 'Red: ' + output.scores[0] + ', yellow: ' + output.scores[1];
+        spanScore.innerHTML = 
+            player1 + ' (<font color=red>red</font>): ' + output.scores[0] + '<br>' + 
+            player2 + ' (<font color="#999900">yellow</font>): ' + output.scores[1];
 
         var ctx = ctlCanvas.getContext('2d');
         
@@ -138,9 +149,24 @@
 </div>
 
 <div style='margin: 10px'>
-<p>File:
-<input id=ctlFile type=text>
-<input type=button value='Load' onclick='OnLoad()'>
+<p>Map:
+<select id=ctlMap onchange="OnLoad()">
+   <option value="lambda">Lambda
+   <option value="sierpinski">Sierpinski
+   <option value="circle">Circle
+   <option value="random1">Random 1
+   <option value="random2">Random 2
+   <option value="london">London tube
+   <!-- <option value="boston">Boston -->
+</select>
+
+<select id=ctlMatch onchange="OnLoad()">
+   <option value="lightning-standard">Lightning vs Standard
+   <option value="standard-lightning">Standard vs Lightning
+</select>
+
+<p>
+<input id=ctlOption type=checkbox checked onchange="OnLoad()">Use options?
 
 <p>
 <input type=button value='|&lt;' onclick='Move(0)'>
@@ -155,3 +181,6 @@
 <span id=spanScore></span>
 </div>
 
+<script>
+OnLoad()
+</script>

@@ -180,7 +180,7 @@ namespace Icfp2017
                 var punters = new List<int>() { myId };
                 if (solverState.initialState.punters.Value == 2)
                 {
-                    punters.Insert(0, 1 - myId);
+                    punters.Add(1 - myId);
                 }
 
                 foreach (var punter in punters)
