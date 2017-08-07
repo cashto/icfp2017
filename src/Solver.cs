@@ -60,8 +60,6 @@ namespace Icfp2017
 
                 if (message.move != null)
                 {
-                    Log(10000, "<move");
-
                     // Make a move
                     try
                     {
@@ -77,14 +75,15 @@ namespace Icfp2017
                             var lastMove = message.move.moves.First(move =>
                                 move.claim != null && move.claim.punter == punter ||
                                 move.option != null && move.option.punter == punter ||
-                                move.splurge != null && move.splurge.punter == punter);
+                                move.splurge != null && move.splurge.punter == punter ||
+                                move.pass != null && move.pass.punter == punter);
 
                             state.moves.Add(lastMove);
                         }
 
                         var ans = V4Strategy(message.move, state);
 
-                        ans.state = JObject.FromObject(
+                        savedState = ans.state = JObject.FromObject(
                             state,
                             new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore });
 
@@ -97,8 +96,6 @@ namespace Icfp2017
                 }
                 else if (message.punter != null)
                 {
-                    Log(10000, "<setup");
-
                     // Initial setup
                     message.settings = message.settings ?? new Settings();
 
@@ -114,13 +111,8 @@ namespace Icfp2017
 
                     savedState = response.state;
                 }
-                else if (message.timeout != null)
-                {
-                    Log(10000, "<timeout");
-                }
                 else if (message.stop != null)
                 {
-                    Log(10000, $"<stop: {JsonConvert.SerializeObject(message.stop.scores)}");
                     break;
                 }
             } while (onlineMode);
@@ -186,10 +178,13 @@ namespace Icfp2017
             // if we see a choke, take it
             var chokeFindTask = Task.Run(() =>
             {
-                var me = new List<int>() { myId };
-                var everyoneElse = Enumerable.Range(0, solverState.initialState.punters.Value).Where(i => i != myId);
+                var punters = new List<int>() { myId };
+                if (solverState.initialState.punter.Value == 2)
+                {
+                    punters.Insert(0, 1 - myId);
+                }
 
-                foreach (var punter in everyoneElse.Concat(me))
+                foreach (var punter in punters)
                 {
                     var availableOptions = new List<River>();
                     if (canUseOptions && punter == myId)

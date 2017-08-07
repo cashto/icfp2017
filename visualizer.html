@@ -27,7 +27,6 @@
         map = JSON.parse(file.ReadAll());
         file.Close();
         
-        output.verbose.moves = output.verbose.moves.slice(2);
         var xs = map.sites.map(function(i) { return i.x; });
         var ys = map.sites.map(function(i) { return i.y; });
 
