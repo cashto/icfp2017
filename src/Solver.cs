@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,16 +13,20 @@ namespace Icfp2017
     class SolverState
     {
         public ServerMessage initialState;
+        public List<Move> moves;
     }
 
     class Program
     {
+        const string MyName = "Prototyp by cashto";
+
         static void Main(string[] args)
         {
-            Parser parser;
             string debug = null;
-
             // debug = @"C:\Users\cashto\Documents\GitHub\icfp2017\work\\debug39";
+
+            Parser parser;
+            var onlineMode = args.Length > 0;
 
             if (debug != null)
             {
@@ -31,34 +36,94 @@ namespace Icfp2017
             }
             else
             {
-                parser = new Parser(Console.In, Console.Out) { debug = false };
+                if (!onlineMode)
+                {
+                    parser = new Parser(Console.In, Console.Out) { debug = false };
+                }
+                else
+                {
+                    var tcpClient = new TcpClient() { NoDelay = true };
+                    tcpClient.Connect("punter.inf.ed.ac.uk", int.Parse(args[0]));
+                    var stream = tcpClient.GetStream();
+                    parser = new Parser(new StreamReader(stream), new StreamWriter(stream)) { debug = true };
+                }
+
                 parser.Write(new MeMessage() { me = "Prototyp by cashto" });
                 parser.Read<YouMessage>();
             }
 
-            var message = parser.Read<ServerMessage>();
-
-            if (message.move != null)
+            JObject savedState = null;
+            
+            do
             {
-                // Make a move
-                var state = message.state.ToObject<SolverState>();
-                var ans = V4Strategy(message.move, state);
-                ans.state = message.state;
-                parser.Write(ans);
-            }
-            else if (message.punter != null)
-            {
-                // Initial setup
-                message.settings = message.settings ?? new Settings();
+                var message = parser.Read<ServerMessage>();
 
-                parser.Write(new SetupResponse()
+                if (message.move != null)
                 {
-                    ready = message.punter.Value,
-                    state = JObject.FromObject(
-                        new SolverState() { initialState = message },
-                        new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore })
-                });
-            }
+                    Log(10000, "<move");
+
+                    // Make a move
+                    try
+                    {
+                        var state = (onlineMode ? savedState : message.state).ToObject<SolverState>();
+
+                        var myId = state.initialState.punter.Value;
+                        var punters = state.initialState.punters.Value;
+
+                        foreach (var idx in Enumerable.Range(myId, punters))
+                        {
+                            var punter = idx % punters;
+
+                            var lastMove = message.move.moves.First(move =>
+                                move.claim != null && move.claim.punter == punter ||
+                                move.option != null && move.option.punter == punter ||
+                                move.splurge != null && move.splurge.punter == punter);
+
+                            state.moves.Add(lastMove);
+                        }
+
+                        var ans = V4Strategy(message.move, state);
+
+                        ans.state = JObject.FromObject(
+                            state,
+                            new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore });
+
+                        parser.Write(ans);
+                    }
+                    catch (Exception e)
+                    {
+                        Log(0, $"[{e.ToString()}]");
+                    }
+                }
+                else if (message.punter != null)
+                {
+                    Log(10000, "<setup");
+
+                    // Initial setup
+                    message.settings = message.settings ?? new Settings();
+
+                    var response = new SetupResponse()
+                    {
+                        ready = message.punter.Value,
+                        state = JObject.FromObject(
+                            new SolverState() { initialState = message, moves = new List<Move>() },
+                            new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore })
+                    };
+
+                    parser.Write(response);
+
+                    savedState = response.state;
+                }
+                else if (message.timeout != null)
+                {
+                    Log(10000, "<timeout");
+                }
+                else if (message.stop != null)
+                {
+                    Log(10000, $"<stop: {JsonConvert.SerializeObject(message.stop.scores)}");
+                    break;
+                }
+            } while (onlineMode);
         }
 
         static Move CreateClaimMove(
@@ -101,7 +166,7 @@ namespace Icfp2017
 
             var initialMap = solverState.initialState.map;
 
-            var takenRivers = Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => true)
+            var takenRivers = Utils.ConvertMovesToRivers(initialMap, solverState.moves, (id) => true)
                 .ToLookup(river => river, river => true);
 
             var availableRivers = initialMap.rivers
@@ -110,7 +175,7 @@ namespace Icfp2017
 
             var canUseOptions =
                 solverState.initialState.settings.options &&
-                message.moves.Count(move => move.option != null && move.option.punter == myId) < initialMap.mines.Count;
+                solverState.moves.Count(move => move.option != null && move.option.punter == myId) < initialMap.mines.Count;
 
             var adjacencyMap = new AdjacencyMap(initialMap.rivers);
 
@@ -129,18 +194,18 @@ namespace Icfp2017
                     var availableOptions = new List<River>();
                     if (canUseOptions && punter == myId)
                     {
-                        var takenOptions = Utils.ConvertMovesToRivers(initialMap, message.moves.Where(move => move.option != null), (id) => true)
+                        var takenOptions = Utils.ConvertMovesToRivers(initialMap, solverState.moves.Where(move => move.option != null), (id) => true)
                             .ToLookup(river => river, river => true);
 
                         availableOptions =
-                            Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id != myId)
+                            Utils.ConvertMovesToRivers(initialMap, solverState.moves, (id) => id != myId)
                             .Where(river => !takenOptions.Contains(river))
                             .ToList();
                     }
 
                     var chokes = FindChokes(
                         initialMap.mines,
-                        Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == punter).ToList(),
+                        Utils.ConvertMovesToRivers(initialMap, solverState.moves, (id) => id == punter).ToList(),
                         availableRivers.Concat(availableOptions).ToList(),
                         startTime.AddMilliseconds(900));
 
@@ -165,7 +230,7 @@ namespace Icfp2017
 
             // otherwise just play a move that joins two trees, increases liberty, or increases score
             var trees = new TreeSet(
-                Utils.ConvertMovesToRivers(initialMap, message.moves, (id) => id == myId),
+                Utils.ConvertMovesToRivers(initialMap, solverState.moves, (id) => id == myId),
                 initialMap.mines);
 
             var riversToConsider = availableRivers
@@ -226,7 +291,7 @@ namespace Icfp2017
                 .Select(treePair => new
                 {
                     treePair = treePair,
-                    shortestPath = Utils.FindShortestPath(
+                    shortestPath = DateTime.UtcNow > deadLine ? null : Utils.FindShortestPath(
                         treePair.Item1,
                         treePair.Item2,
                         allRivers,

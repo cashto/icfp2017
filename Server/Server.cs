@@ -50,9 +50,11 @@ namespace Icfp2017
                     }).state)
                 .ToList();
 
-            var moves = Enumerable.Range(0, ais.Count)
+            var lastMoves = Enumerable.Range(0, ais.Count)
                 .Select(idx => new Move() { pass = new PassMove() { punter = idx } })
                 .ToList();
+
+            var allMoves = new List<Move>();
 
             foreach (var moveNumber in Enumerable.Range(0, map.rivers.Count))
             {
@@ -73,20 +75,21 @@ namespace Icfp2017
                     {
                         move = new MoveMessage()
                         {
-                            moves = moves
+                            moves = lastMoves
                         },
                         state = states[aiIdx]
                     });
 
                 states[aiIdx] = move.state;
                 move.state = null;
-                moves.Add(move);
+                lastMoves[aiIdx] = move;
+                allMoves.Add(move);
             }
 
             var mineDistances = new MineDistances(map, new AdjacencyMap(map.rivers));
 
             var scores = Enumerable.Range(0, ais.Count)
-                .Select(idx => (new TreeSet(Utils.ConvertMovesToRivers(map, moves, (id) => id == idx))).ComputeScore(mineDistances))
+                .Select(idx => (new TreeSet(Utils.ConvertMovesToRivers(map, allMoves, (id) => id == idx))).ComputeScore(mineDistances))
                 .ToList();
 
             var output = new Output()
@@ -96,7 +99,7 @@ namespace Icfp2017
                 map = args[0],
                 verbose = new VerboseOutput()
                 {
-                    moves = moves
+                    moves = allMoves
                 }
             };
 
