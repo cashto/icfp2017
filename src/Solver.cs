@@ -18,8 +18,6 @@ namespace Icfp2017
 
     class Program
     {
-        const string MyName = "Prototyp by cashto";
-
         static void Main(string[] args)
         {
             string debug = null;
@@ -30,15 +28,13 @@ namespace Icfp2017
 
             if (debug != null)
             {
-                parser = new Parser(
-                    new StreamReader(debug),
-                    Console.Out);
+                parser = new Parser(new StreamReader(debug), Console.Out);
             }
             else
             {
                 if (!onlineMode)
                 {
-                    parser = new Parser(Console.In, Console.Out) { debug = false };
+                    parser = new Parser(Console.In, Console.Out);
                 }
                 else
                 {
@@ -373,10 +369,10 @@ namespace Icfp2017
 
         static void Log(int myId, string s)
         {
-            using (var file = File.AppendText($"prototyp-{myId}.log"))
-            {
-                file.WriteLine(s);
-            }
+            //using (var file = File.AppendText($"prototyp-{myId}.log"))
+            //{
+            //    file.WriteLine(s);
+            //}
         }
     }
 }
